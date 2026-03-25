@@ -1,3 +1,15 @@
+/**
+ * @file CordicHelper.cpp
+ * @brief CORDIC helper utility for fixed-point conversion and CORDIC peripheral setup.
+ * @authorbaoqi-zhong (zzhongas@connect.ust.hk)
+ *
+ * Part of RoboMotor-FOC-Algorithm.
+ * Copyright (c) 2026 baoqi-zhong
+ *
+ * This file is licensed under the MIT License.
+ * See the LICENSE file in the project root for full license text.
+ */
+
 #include "CordicHelper.hpp"
 
 namespace Utils
