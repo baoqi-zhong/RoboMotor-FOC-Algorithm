@@ -24,10 +24,10 @@ class IncrementalPID
 {
 public:
     IncrementalPID();
-    void setParameters(PIDParameters_t parameters_);
+    void setParameters(const PIDParameters_t& parameters_);
     float operator()(float target, float measurement);
     void reset();
-    PIDParameters_t getParameters();
+    PIDParameters_t getParameters() const;
     void setOutput(float output_);
 
 private:

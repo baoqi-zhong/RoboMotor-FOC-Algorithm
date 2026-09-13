@@ -87,8 +87,9 @@ uint16_t getEncoderAfterCompensation(uint16_t rawAngle)
     return firstCompensationAngle;
 }
 
-void setConfig(EncoderConfig* config)
+void setConfig(const EncoderConfig* config)
 {
+    assert_param(config != nullptr);
     encoderConfig = *config;
     assert_param(encoderConfig.driverType >= EncoderDriverType::MA732 && encoderConfig.driverType <= EncoderDriverType::M3508_LinerHallEncoder);
     if(encoderConfig.driverType == EncoderDriverType::MA732)

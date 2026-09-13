@@ -77,7 +77,7 @@ void init()
     // 初始化各个模块
     Sensor::ADC::start();
     Sensor::Encoder::init();
-    Utils::CordicHelper::cordic16_init();
+    Utils::CordicHelper::initCordic16();
     Control::Calibrator::init();
     Control::InterBoard::init();
 
@@ -240,28 +240,28 @@ void Loop1KHz()
         HAL_TIMEx_ConfigAsymmetricalDeadTime(&htim1, dead2);
 
         // 已经充了 1ms, 直接开始正常运行
-        Control::FOC::setPhraseVoltage(0.02f, 0.0f);
-        // if(motorControlStatus.enableCalibration == 1)
-        // {
-        //     // 使能上管
-        //     HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_1);
-        //     HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_2);
-        //     HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_3);
+        // Control::FOC::setPhraseVoltage(0.06f, 0.0f);
+        if(motorControlStatus.enableCalibration == 1)
+        {
+            // 使能上管
+            HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_1);
+            HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_2);
+            HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_3);
             
-        //     /* 停止正常开 FOC 的状态机 */
-        //     motorControlStatus.state = MotorControlState::Stop;
-        //     motorControlStatus.calibrationState = MotorCalibrationState::preCalibrating;
-        // }
-        // else
-        // {
-        //     // 防止覆盖校准逻辑里对 targetIq 的设置
-        //     motorControlStatus.targetIq = 0;
-        //     motorControlStatus.targetId = 0;
-        //     motorControlStatus.targetPosition = 0;
-        //     motorControlStatus.targetVelocity = 0;
+            /* 停止正常开 FOC 的状态机 */
+            motorControlStatus.state = MotorControlState::Stop;
+            motorControlStatus.calibrationState = MotorCalibrationState::preCalibrating;
+        }
+        else
+        {
+            // 防止覆盖校准逻辑里对 targetIq 的设置
+            motorControlStatus.targetIq = 0;
+            motorControlStatus.targetId = 0;
+            motorControlStatus.targetPosition = 0;
+            motorControlStatus.targetVelocity = 0;
             
-        //     motorControlStatus.state = MotorControlState::preRunning;
-        // }
+            motorControlStatus.state = MotorControlState::preRunning;
+        }
     }
 
     else if (motorControlStatus.state == MotorControlState::preRunning) 

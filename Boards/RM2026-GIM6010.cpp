@@ -9,8 +9,9 @@
  * This file is licensed under the MIT License.
  * See the LICENSE file in the project root for full license text.
  */
-#if 0
+
 #include "Boards.hpp"
+#if (BOARD_RM2026_GIM6010)
 #include "WS2812.hpp"
 
 namespace Boards

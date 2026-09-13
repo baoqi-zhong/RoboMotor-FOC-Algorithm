@@ -12,13 +12,10 @@
 #pragma once
 
 #include "main.h"
-#include "stdint.h"
 
-#include "ThreePhaseFOC.hpp"
-#include "ADC.hpp"
+#define BOARD_RM_DOCK_FOC   1
 
 namespace Boards
 {
-/* init() 函数为所有硬件参数对外的接口 */
-void init();
-}
+    void init();
+} // namespace Boards

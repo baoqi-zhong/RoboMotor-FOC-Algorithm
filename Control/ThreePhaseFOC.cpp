@@ -28,15 +28,15 @@ FOCConfig focConfig;
 
 float Q_rsqrt( float number )
 {
-	long i;
+	uint32_t i;
 	float x2, y;
-	const float threehalfs = 1.5F;
+	constexpr float threehalfs = 1.5f;
 
-	x2 = number * 0.5F;
+	x2 = number * 0.5f;
 	y  = number;
-	i  = * ( long * ) &y;                       // evil floating point bit level hacking
-	i  = 0x5f3759df - ( i >> 1 );               // what the fuck?
-	y  = * ( float * ) &i;
+	__builtin_memcpy(&i, &y, sizeof(i));
+	i  = 0x5f3759dfU - ( i >> 1 );
+	__builtin_memcpy(&y, &i, sizeof(y));
 	y  = y * ( threehalfs - ( x2 * y * y ) );   // 1st iteration
 //      y  = y * ( threehalfs - ( x2 * y * y ) );   // 2nd iteration, this can be removed
 
@@ -205,17 +205,23 @@ void disableFOC()
 }
 
 // 基准电流, 在计算 Park 变换的时候调用 cordic 前的缩放值. 最大电流不应超过此数
-#define I_BASE 25.0f
-
-void setMotorConfig(MotorConfig* config)
+namespace
 {
+constexpr float CurrentCordicBase = 25.0f;
+constexpr uint32_t TimerInputClockHz = 170000000U;
+}
+
+void setMotorConfig(const MotorConfig* config)
+{
+    assert_param(config != nullptr);
     motorConfig = *config;
 }
 
-void setFOCConfig(FOCConfig* config)
+void setFOCConfig(const FOCConfig* config)
 {
+    assert_param(config != nullptr);
     focConfig = *config;
-    focConfig.timerPeriod = 170000000 / (uint32_t)(focConfig.currentLoopFreq) / 2;
+    focConfig.timerPeriod = TimerInputClockHz / (uint32_t)(focConfig.currentLoopFreq) / 2;
     __HAL_TIM_SetAutoreload(&htim1, focConfig.timerPeriod);
 }
 
@@ -235,16 +241,16 @@ void currentLoop()
     // measuredIq = measuredIalpha * sinf(realAngle) - measuredIbeta * cosf(realAngle);
     float cordicOutputSinMulIalpha;
     float cordicOutputCosMulIalpha;
-    hcordic.Instance->WDATA = (Utils::CordicHelper::singleFloatToCordic15(measuredIalpha / I_BASE) << 16) | (Sensor::Encoder::encoderStatus.Q16_electricAngle & 0xFFFF);
+    hcordic.Instance->WDATA = (Utils::CordicHelper::singleFloatToCordic15(measuredIalpha / CurrentCordicBase) << 16) | (Sensor::Encoder::encoderStatus.Q16_electricAngle & 0xFFFF);
     Utils::CordicHelper::cordic15ToDualFloat((int32_t)(hcordic.Instance->RDATA), &cordicOutputSinMulIalpha, &cordicOutputCosMulIalpha);
 
     float cordicOutputSinMulIbeta;
     float cordicOutputCosMulIbeta;
-    hcordic.Instance->WDATA = (Utils::CordicHelper::singleFloatToCordic15(measuredIbeta / I_BASE) << 16) | (Sensor::Encoder::encoderStatus.Q16_electricAngle & 0xFFFF);
+    hcordic.Instance->WDATA = (Utils::CordicHelper::singleFloatToCordic15(measuredIbeta / CurrentCordicBase) << 16) | (Sensor::Encoder::encoderStatus.Q16_electricAngle & 0xFFFF);
     Utils::CordicHelper::cordic15ToDualFloat((int32_t)(hcordic.Instance->RDATA), &cordicOutputSinMulIbeta, &cordicOutputCosMulIbeta);
 
-    measuredId = (cordicOutputCosMulIalpha + cordicOutputSinMulIbeta) * I_BASE;
-    measuredIq = (-cordicOutputSinMulIalpha + cordicOutputCosMulIbeta) * I_BASE;
+    measuredId = (cordicOutputCosMulIalpha + cordicOutputSinMulIbeta) * CurrentCordicBase;
+    measuredIq = (-cordicOutputSinMulIalpha + cordicOutputCosMulIbeta) * CurrentCordicBase;
 
     if(MotorControl::motorControlStatus.enableFOCOutput == 0)
     {

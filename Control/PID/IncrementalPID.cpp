@@ -19,11 +19,11 @@ IncrementalPID::IncrementalPID()
     this->reset();
 }
 
-void IncrementalPID::setParameters(PIDParameters_t parameters_)
+void IncrementalPID::setParameters(const PIDParameters_t& parameters_)
 {
-    assert_param(parameters.outputLimit >= 0.0f);
-    assert_param(parameters.updateFrequency > 0.0f);
-    assert_param(parameters.alpha >= 0.0f && parameters.alpha <= 1.0f);
+    assert_param(parameters_.outputLimit >= 0.0f);
+    assert_param(parameters_.updateFrequency > 0.0f);
+    assert_param(parameters_.alpha >= 0.0f && parameters_.alpha <= 1.0f);
 
     this->parameters = parameters_;
     this->reset();
@@ -69,7 +69,7 @@ void IncrementalPID::reset()
     this->output                = 0.0f;
 }
 
-PIDParameters_t IncrementalPID::getParameters()
+PIDParameters_t IncrementalPID::getParameters() const
 {
     return this->parameters;
 }

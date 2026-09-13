@@ -87,7 +87,7 @@ float normalizeAngleNegPiToPi(float _angle);
 int16_t getCompensation(uint16_t rawAngle);
 uint16_t getEncoderAfterCompensation(uint16_t rawAngle);
 
-void setConfig(EncoderConfig* config);
+void setConfig(const EncoderConfig* config);
 
 /**
  * @brief Initializes the encoder.

@@ -35,7 +35,7 @@ class PositionalPID
 {
 public:
     PositionalPID();
-    void setParameters(PIDParameters_t parameters_);
+    void setParameters(const PIDParameters_t& parameters_);
     PIDParameters_t getParameters() const { return this->parameters; }
     void setOutputLimit(float outputLimit_) { this->parameters.outputLimit = outputLimit_; }
     float operator()(float target, float measurement);

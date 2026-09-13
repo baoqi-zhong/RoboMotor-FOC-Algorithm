@@ -10,20 +10,42 @@
  * See the LICENSE file in the project root for full license text.
  */
 
-/* Constants */
-#define PI                          3.1415926f
-#define TWO_PI                      6.2831853f
-#define ONE_OVER_SQRT3              0.5773503f
-#define TWO_OVER_SQRT3              1.1547005f
-#define SQRT3                       1.7320508f
-#define SQRT3_OVER_2                0.8660254f
-#define RPM_TO_RAD_PER_S_RATIO      0.1047198f
-#define RAD_PER_S_TO_RPM_RATIO      9.549296f
+#pragma once
 
-/* Macro Functions */
-#define CLAMP(x, min, max) ((x) > (max) ? (max) : ((x) < (min) ? (min) : (x)))
+inline constexpr float PI                          = 3.1415926f;
+inline constexpr float TWO_PI                      = 6.2831853f;
+inline constexpr float ONE_OVER_SQRT3              = 0.5773503f;
+inline constexpr float TWO_OVER_SQRT3              = 1.1547005f;
+inline constexpr float SQRT3                       = 1.7320508f;
+inline constexpr float SQRT3_OVER_2                = 0.8660254f;
+inline constexpr float RPM_TO_RAD_PER_S_RATIO      = 0.1047198f;
+inline constexpr float RAD_PER_S_TO_RPM_RATIO      = 9.549296f;
 
-#define FABS(x)     ((x) > 0 ? (x) : -(x))
-#define MIN(a,b)    ((a)<(b)?(a):(b))
-#define MAX(a,b)    ((a)>(b)?(a):(b))
-#define FMOD(x, y)  ((x) - (int)((x) / (y)) * (y))
+template<typename T>
+constexpr T CLAMP(T value, T minimum, T maximum)
+{
+    return value > maximum ? maximum : (value < minimum ? minimum : value);
+}
+
+template<typename T>
+constexpr T FABS(T value)
+{
+    return value >= T{} ? value : -value;
+}
+
+template<typename T>
+constexpr T MIN(T a, T b)
+{
+    return a < b ? a : b;
+}
+
+template<typename T>
+constexpr T MAX(T a, T b)
+{
+    return a > b ? a : b;
+}
+
+constexpr float FMOD(float value, float divisor)
+{
+    return value - static_cast<int>(value / divisor) * divisor;
+}

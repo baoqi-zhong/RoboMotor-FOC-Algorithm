@@ -24,12 +24,15 @@ namespace Sensor
 {
 namespace ADC
 {
-#define MAX_ADC_REGULAR_CHANNEL_NUM     4
+namespace
+{
+constexpr uint8_t MaxADCRegularChannelNum = 4;
+}
 
 ADCConfig adcConfig;
 ADCCalibrationData adcCalibrationData;
 
-uint16_t adcRegularChannelBuffer[MAX_ADC_REGULAR_CHANNEL_NUM * 2];
+uint16_t adcRegularChannelBuffer[MaxADCRegularChannelNum * 2];
 const uint16_t ZERO_VALUE_VARIABLE = 0;
 
 AnalogValuePointers analogValuePointers;
@@ -92,7 +95,7 @@ void setConfig(const ADCConfig* config, const ADCCalibrationData* calibrationDat
 
     if(config->enableRegularChannels == 1)
     {
-        assert_param(config->regularChannelNum > 0 && config->regularChannelNum <= MAX_ADC_REGULAR_CHANNEL_NUM);
+        assert_param(config->regularChannelNum > 0 && config->regularChannelNum <= MaxADCRegularChannelNum);
         if(config->VA_hadc != ADCIndex::DISABLED)
         {
             assert_param(config->VA_channel >= ADCChannel::REGULAR_CHANNEL_1 && config->VA_channel <= ADCChannel::REGULAR_CHANNEL_4);
@@ -165,10 +168,8 @@ void triggerRegularConversion()
     }
 }
 
-uint16_t fuck = 0;
 void decodeInjectedBuffer()
 {
-    fuck = *analogValuePointers.pIABuffer;
     analogValues.measuredIA = ((float)*analogValuePointers.pIABuffer    - adcCalibrationData.IA_BIAS)   * adcCalibrationData.IA_GAIN;
     analogValues.measuredIB = ((float)*analogValuePointers.pIBBuffer    - adcCalibrationData.IB_BIAS)   * adcCalibrationData.IB_GAIN;
     analogValues.measuredIC = ((float)*analogValuePointers.pICBuffer    - adcCalibrationData.IC_BIAS)   * adcCalibrationData.IC_GAIN;

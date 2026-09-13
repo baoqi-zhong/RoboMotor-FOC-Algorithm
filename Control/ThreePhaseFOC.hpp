@@ -65,9 +65,9 @@ extern FOCConfig focConfig;
 void setPhraseVoltage(float Ualpha, float Ubeta);
 
 
-void setMotorConfig(MotorConfig* config);
+void setMotorConfig(const MotorConfig* config);
 
-void setFOCConfig(FOCConfig* config);
+void setFOCConfig(const FOCConfig* config);
 
 /**
  * @brief 初始化三相 FOC (电流环)
