@@ -45,9 +45,13 @@ float Q_rsqrt( float number )
 
 uint8_t sector = 0;
 float X = 0, Y = 0;
-uint32_t CCRA = 0, CCRB = 0, CCRC = 0;
+uint32_t dutyCycleA = 0, dutyCycleB = 0, dutyCycleC = 0;
 void setPhraseVoltage(float Ualpha, float Ubeta)
 {
+    float dutyCycleA = 0.0f;
+    float dutyCycleB = 0.0f;
+    float dutyCycleC = 0.0f;
+
     float scaleSquare = Ualpha * Ualpha + Ubeta * Ubeta;
     if(scaleSquare > 1)
     {
@@ -93,59 +97,48 @@ void setPhraseVoltage(float Ualpha, float Ubeta)
     case 1:
         X = - MINUS_ALPHA_PLUS_BETA_MUL_1_OVER_SQRT3;
         Y =   BETA_MUL_2_OVER_SQRT3;
-        CCRA = (1 + X + Y) / 2 * focConfig.timerPeriod;
-        CCRB = (1 - X + Y) / 2 * focConfig.timerPeriod;
-        CCRC = (1 - X - Y) / 2 * focConfig.timerPeriod;
+        dutyCycleA = (1 + X + Y) / 2;
+        dutyCycleB = (1 - X + Y) / 2;
+        dutyCycleC = (1 - X - Y) / 2;
         break;
     case 2:
         X =   ALPHA_PLUS_BETA_MUL_1_OVER_SQRT3;
         Y =   MINUS_ALPHA_PLUS_BETA_MUL_1_OVER_SQRT3;
-        CCRA = (1 + X - Y) / 2 * focConfig.timerPeriod;
-        CCRB = (1 + X + Y) / 2 * focConfig.timerPeriod;
-        CCRC = (1 - X - Y) / 2 * focConfig.timerPeriod;
+        dutyCycleA = (1 + X - Y) / 2;
+        dutyCycleB = (1 + X + Y) / 2;
+        dutyCycleC = (1 - X - Y) / 2;
         break;
     case 3:
         X =   BETA_MUL_2_OVER_SQRT3;
         Y = - ALPHA_PLUS_BETA_MUL_1_OVER_SQRT3;
-        CCRA = (1 - X - Y) / 2 * focConfig.timerPeriod;
-        CCRB = (1 + X + Y) / 2 * focConfig.timerPeriod;
-        CCRC = (1 - X + Y) / 2 * focConfig.timerPeriod;
+        dutyCycleA = (1 - X - Y) / 2;
+        dutyCycleB = (1 + X + Y) / 2;
+        dutyCycleC = (1 - X + Y) / 2;
         break;
     case 4:
         X =   MINUS_ALPHA_PLUS_BETA_MUL_1_OVER_SQRT3;
         Y = - BETA_MUL_2_OVER_SQRT3;
-        CCRA = (1 - X - Y) / 2 * focConfig.timerPeriod;
-        CCRB = (1 + X - Y) / 2 * focConfig.timerPeriod;
-        CCRC = (1 + X + Y) / 2 * focConfig.timerPeriod;
+        dutyCycleA = (1 - X - Y) / 2;
+        dutyCycleB = (1 + X - Y) / 2;
+        dutyCycleC = (1 + X + Y) / 2;
         break;
     case 5:
         X = - ALPHA_PLUS_BETA_MUL_1_OVER_SQRT3;
         Y = - MINUS_ALPHA_PLUS_BETA_MUL_1_OVER_SQRT3;
-        CCRA = (1 - X + Y) / 2 * focConfig.timerPeriod;
-        CCRB = (1 - X - Y) / 2 * focConfig.timerPeriod;
-        CCRC = (1 + X + Y) / 2 * focConfig.timerPeriod;
+        dutyCycleA = (1 - X + Y) / 2;
+        dutyCycleB = (1 - X - Y) / 2;
+        dutyCycleC = (1 + X + Y) / 2;
         break;
     case 6:
         X = - BETA_MUL_2_OVER_SQRT3;
         Y =   ALPHA_PLUS_BETA_MUL_1_OVER_SQRT3;
-        CCRA = (1 + X + Y) / 2 * focConfig.timerPeriod;
-        CCRB = (1 - X - Y) / 2 * focConfig.timerPeriod;
-        CCRC = (1 + X - Y) / 2 * focConfig.timerPeriod;
+        dutyCycleA = (1 + X + Y) / 2;
+        dutyCycleB = (1 - X - Y) / 2;
+        dutyCycleC = (1 + X - Y) / 2;
         break;
     }
 
-    if(motorConfig.REVERSE_DIRECTION)
-    {
-        htim1.Instance->CCR1 = CCRC;
-        htim1.Instance->CCR2 = CCRB;
-        htim1.Instance->CCR3 = CCRA;
-    }
-    else
-    {
-        htim1.Instance->CCR1 = CCRA;
-        htim1.Instance->CCR2 = CCRB;
-        htim1.Instance->CCR3 = CCRC;
-    }
+    Boards::setTimerPWMDutyCycle(dutyCycleA, dutyCycleB, dutyCycleC);
 }
 
 // 电流环
@@ -178,27 +171,9 @@ float openloopPosition = 0.0f;
 float openloopVelocity = 0.0f;
 float openloopAcceleration = 80.0f;
 
-static void TIM_CCxNChannelCmd(TIM_TypeDef *TIMx, uint32_t Channel, uint32_t ChannelNState)
-{
-  uint32_t tmp;
-
-  tmp = TIM_CCER_CC1NE << (Channel & 0xFU); /* 0xFU = 15 bits max shift */
-
-  /* Reset the CCxNE Bit */
-  TIMx->CCER &=  ~tmp;
-
-  /* Set or reset the CCxNE Bit */
-  TIMx->CCER |= (uint32_t)(ChannelNState << (Channel & 0xFU)); /* 0xFU = 15 bits max shift */
-}
-
 void disableFOC()
 {
-    htim1.Instance->CCR1 = 0;
-    htim1.Instance->CCR2 = 0;
-    htim1.Instance->CCR3 = 0;
-
-    TIM_CCxChannelCmd(htim1.Instance, TIM_CHANNEL_1 | TIM_CHANNEL_2 | TIM_CHANNEL_3, TIM_CCx_DISABLE);
-    TIM_CCxNChannelCmd(htim1.Instance, TIM_CHANNEL_1 | TIM_CHANNEL_2 | TIM_CHANNEL_3, TIM_CCx_DISABLE);
+    Boards::stopTimerPWM();
 
     MotorControl::motorControlStatus.enableFOCOutput = 0;
     MotorControl::motorControlStatus.state = MotorControl::MotorControlState::Stop;

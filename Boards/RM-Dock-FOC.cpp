@@ -13,26 +13,24 @@
 #include "Boards.hpp"
 #if (BOARD_RM_DOCK_FOC)
 
+#include "main.h"
+#include "adc.h"
+#include "opamp.h"
+#include "tim.h"
+
 #include "WS2812.hpp"
+#include "ThreePhaseFOC.hpp"
 #include "MotorControl.hpp"
 #include "STSPIN32G4MosfetDriver.hpp"
 #include "ErrorHandler.hpp"
 #include "Encoder.hpp"
+#include "ADC.hpp"
 #include "InterBoard.hpp"
-#include "ConfigLoader.hpp"
-#include "FlashManager.hpp"
-
-/**
- * 约定: 各种校准参数和硬件参数只在代码里出现一次, 其余驱动以指针形式引用. 
- * 初始化时必须调用对应的修改函数来修改参数, 否则会出现 nullptr 错误.
- * 校准过程中修改的数组实际上还是此处定义的数组.
- */
 
 namespace Boards
 {
 constexpr float CurrentLoopFreq = 20000.0f;
 
-/* 电机参数, 可以运行中校准 */
 constexpr Control::FOC::MotorConfig motorConfig = {
     .REVERSE_DIRECTION              = 0,
     .POLE_PAIRS                     = 7,
@@ -47,24 +45,16 @@ constexpr Control::FOC::FOCConfig focConfig = {
     .currentLoopFreq = CurrentLoopFreq,
 };
 
-/* ADC 参数, 运行过程中不修改 */
-constexpr Sensor::ADC::ADCConfig adcConfig = {
+extern const Sensor::ADC::ADCConfig staticADCConfig = {
     .IA_hadc    = Sensor::ADC::ADCIndex::ADC_1,         .IA_channel         = Sensor::ADC::ADCChannel::INJECTED_CHANNEL_1,
     .IB_hadc    = Sensor::ADC::ADCIndex::ADC_2,         .IB_channel         = Sensor::ADC::ADCChannel::INJECTED_CHANNEL_1,
     .IC_hadc    = Sensor::ADC::ADCIndex::ADC_1,         .IC_channel         = Sensor::ADC::ADCChannel::INJECTED_CHANNEL_2,
+    .Vbus_hadc  = Sensor::ADC::ADCIndex::ADC_1,         .Vbus_channel       = Sensor::ADC::ADCChannel::REGULAR_CHANNEL_1,
 
-    .Vbus_hadc      = Sensor::ADC::ADCIndex::ADC_1,     .Vbus_channel       = Sensor::ADC::ADCChannel::REGULAR_CHANNEL_1,
-    .VREFINT_hadc   = Sensor::ADC::ADCIndex::ADC_1,     .Vrefint_channel    = Sensor::ADC::ADCChannel::REGULAR_CHANNEL_2,
-    .user_hadc1     = Sensor::ADC::ADCIndex::DISABLED,  .user_channel1      = Sensor::ADC::ADCChannel::REGULAR_CHANNEL_1,
-    .user_hadc2     = Sensor::ADC::ADCIndex::DISABLED,  .user_channel2      = Sensor::ADC::ADCChannel::REGULAR_CHANNEL_2,
-
-    .enableOPAMP = 1,
-    .enableRegularChannels = 1,
     .regularChannelNum = 2
 };
 
-/* 需要在运行开始时重新校准 Bias */
-constexpr Sensor::ADC::ADCCalibrationData adcCalibrationData = {
+extern const Sensor::ADC::ADCCalibrationData staticADCCalibrationData = {
     .IA_BIAS    = 2048, .IA_GAIN   = -0.006679319f,
     .IB_BIAS    = 2048, .IB_GAIN   = -0.006679319f,
     .IC_BIAS    = 2048, .IC_GAIN   = -0.006679319f,
@@ -81,7 +71,6 @@ constexpr Sensor::Encoder::EncoderConfig encoderConfig = {
     .encoderDifferenceLPFAlpha = 0.05f
 };
 
-/* 控制器参数, 运行过程中不修改 */
 constexpr Control::MotorControl::MotorControlConfig motorControlConfig = {
     .enableSpeedCloseLoop   = 0,
     .enablePositionCloseLoop= 0,
@@ -152,7 +141,6 @@ constexpr Control::PIDParameters_t IqPIDParameters =
     .updateFrequency = CurrentLoopFreq
 };
 
-/* 板载 LED 配置 */
 Drivers::LED::WS2812Group   RGBGroup(6, &htim3, TIM_CHANNEL_2);
 Drivers::LED::WS2812        IdLED(&RGBGroup, 0, Drivers::LED::LEDFunctionType::DISPLAY_ID);
 Drivers::LED::WS2812        ErrorLED(&RGBGroup, 1, Drivers::LED::LEDFunctionType::DISPLAY_ERROR_ID);
@@ -163,37 +151,95 @@ constexpr Control::InterBoard::InterBoardConfig interBoardConfig = {
     .interboardDisconnectTriggerTimeout = 200
 };
 
+void startTimerBase()
+{
+    // 只开 timer base, 不打开 PWM 输出, 需要在状态机里打开
+    HAL_TIM_Base_Start_IT(&htim1);
+    // 这样做的目的是修改TIM1 Update Event 的相位
+    htim1.Instance->RCR = 1;
+    HAL_TIMEx_ConfigDeadTime(&htim1, 8);
+    HAL_TIMEx_ConfigAsymmetricalDeadTime(&htim1, 8);
+
+    // 4KHz 定时器, 开始运行状态机
+    HAL_TIM_Base_Start_IT(&htim16);
+}
+
+void startTimerPWMLowSide()
+{
+
+}
+
+void startTimerPWMHighSide()
+{
+    HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_1);
+    HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_2);
+    HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_3);
+}
+
+static void TIM_CCxNChannelCmd(TIM_TypeDef *TIMx, uint32_t Channel, uint32_t ChannelNState)
+{
+  uint32_t tmp;
+
+  tmp = TIM_CCER_CC1NE << (Channel & 0xFU); /* 0xFU = 15 bits max shift */
+
+  /* Reset the CCxNE Bit */
+  TIMx->CCER &=  ~tmp;
+
+  /* Set or reset the CCxNE Bit */
+  TIMx->CCER |= (uint32_t)(ChannelNState << (Channel & 0xFU)); /* 0xFU = 15 bits max shift */
+}
+
+void stopTimerPWM()
+{
+    htim1.Instance->CCR1 = 0;
+    htim1.Instance->CCR2 = 0;
+    htim1.Instance->CCR3 = 0;
+
+    TIM_CCxChannelCmd(htim1.Instance, TIM_CHANNEL_1 | TIM_CHANNEL_2 | TIM_CHANNEL_3, TIM_CCx_DISABLE);
+    TIM_CCxNChannelCmd(htim1.Instance, TIM_CHANNEL_1 | TIM_CHANNEL_2 | TIM_CHANNEL_3, TIM_CCx_DISABLE);
+}
+
+void setTimerPWMDutyCycle(float dutyCycleA, float dutyCycleB, float dutyCycleC)
+{
+    float arr = htim1.Instance->ARR + 1;
+    htim1.Instance->CCR1 = dutyCycleA * arr;
+    htim1.Instance->CCR2 = dutyCycleB * arr;
+    htim1.Instance->CCR3 = dutyCycleC * arr;
+}
+
+void startAnalog()
+{
+    HAL_OPAMPEx_SelfCalibrateAll(&hopamp1, &hopamp2, &hopamp3);
+
+    HAL_OPAMP_Start(&hopamp1);
+    HAL_OPAMP_Start(&hopamp2);
+    HAL_OPAMP_Start(&hopamp3);
+
+    HAL_ADCEx_Calibration_Start(&hadc1, ADC_SINGLE_ENDED);
+    HAL_ADCEx_Calibration_Start(&hadc2, ADC_SINGLE_ENDED);
+
+    // HAL_ADC_RegisterCallback(&hadc1, HAL_ADC_CONVERSION_COMPLETE_CB_ID, ADCRegularChannelCallback);
+
+    HAL_ADCEx_InjectedStart_IT(&hadc2);
+    HAL_ADCEx_InjectedStart_IT(&hadc1);
+}
+
 void init()
 {
-    // Control::ConfigLoader::init();
-    // Drivers::FlashManager::erasePageAsync(63, nullptr);
-    // HAL_Delay(100);
+    Sensor::Encoder::setConfig(&encoderConfig);
 
-    // if(Control::ConfigLoader::loadAllConfigFromFlash() != Control::ConfigLoader::ConfigLoaderError::NoError)
-    {
-        // 写入默认配置
-        Sensor::ADC::setConfig(&adcConfig, &adcCalibrationData);
-        Sensor::Encoder::setConfig(&encoderConfig);
+    Control::FOC::setMotorConfig(&motorConfig);
+    Control::FOC::setFOCConfig(&focConfig);
+    Control::FOC::IqPID.setParameters(IqPIDParameters);
+    Control::FOC::IdPID.setParameters(IqPIDParameters);
 
-        Control::FOC::setMotorConfig(&motorConfig);
-        Control::FOC::setFOCConfig(&focConfig);
-        Control::FOC::IqPID.setParameters(IqPIDParameters);
-        Control::FOC::IdPID.setParameters(IqPIDParameters);
+    Control::MotorControl::positionToCurrentPID.setParameters(positionToCurrentPIDParam);
+    Control::MotorControl::positionToVelocityPID.setParameters(positionToVelocityPIDParam);
+    Control::MotorControl::velocityPID.setParameters(velocityPIDParam);
+    Control::MotorControl::setConfig(&motorControlConfig);
 
-        Control::MotorControl::positionToCurrentPID.setParameters(positionToCurrentPIDParam);
-        Control::MotorControl::positionToVelocityPID.setParameters(positionToVelocityPIDParam);
-        Control::MotorControl::velocityPID.setParameters(velocityPIDParam);
-        Control::MotorControl::setConfig(&motorControlConfig);
-
-        Control::ErrorHandler::setConfig(&errorHandlerConfig);
-        Control::InterBoard::setConfig(&interBoardConfig);
-
-
-        // Control::ConfigLoader::saveAllConfigToFlashAsync();
-
-        // Control::MotorControl::motorControlStatus.enableCalibration = 1; // 进入校准状态
-    }
-
+    Control::ErrorHandler::setConfig(&errorHandlerConfig);
+    Control::InterBoard::setConfig(&interBoardConfig);
 
     Sensor::Encoder::MA732::init(&hspi1);
 
@@ -205,6 +251,39 @@ void init()
     Drivers::LED::registerLED(&IdLED);
     Drivers::LED::registerLED(&ErrorLED);
 }
+
+
+
+extern "C" void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef *hadc)
+{
+    Control::MotorControl::ADC_RegularConvCpltEntry();
+}
+
+extern "C" void HAL_ADCEx_InjectedConvCpltCallback(ADC_HandleTypeDef *hadc)
+{
+    Control::MotorControl::ADC_InjectedConvCpltEntry();
+}
+
+uint32_t Loop4KHzCounter = 0;
+extern "C" void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
+{
+    if(htim->Instance == TIM1)
+    {
+        Control::MotorControl::ADC_InjectedConvBeginEntry();
+    }
+    else if (htim->Instance == TIM16)
+    {
+        // 4KHz 中断
+        Control::MotorControl::TIM_4KHzEntry();
+        Loop4KHzCounter += 1;
+        if(Loop4KHzCounter == 4)
+        {
+            Loop4KHzCounter = 0;
+            Control::MotorControl::TIM_1KHzEntry();
+        }
+    }
+}
+
 } // namespace Boards
 
 #endif

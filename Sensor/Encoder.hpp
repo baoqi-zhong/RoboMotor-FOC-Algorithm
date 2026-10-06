@@ -99,6 +99,9 @@ void init();
  */
 void readBlocking();
 
+
+void earlyRead();
+
 /**
  * @brief Sets the electric angle to 0.
  */

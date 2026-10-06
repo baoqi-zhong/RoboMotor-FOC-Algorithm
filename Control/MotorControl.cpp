@@ -57,15 +57,11 @@ Control::PositionalPID positionToCurrentPID;
 Control::PositionalPID positionToVelocityPID;
 Control::PositionalPID velocityPID;
 
-uint32_t Loop4KHzCounter = 0;
 
 void setConfig(const MotorControlConfig* config)
 {
     motorControlConfig = *config;
 }
-
-uint32_t dead1 = 8;
-uint32_t dead2 = 8;
 
 void init()
 {
@@ -81,17 +77,7 @@ void init()
     Control::Calibrator::init();
     Control::InterBoard::init();
 
-    // 只开 timer base, 不打开 PWM 输出, 需要在状态机里打开
-    HAL_TIM_Base_Start_IT(&htim1);
-    // 这样做的目的是修改TIM1 Update Event 的相位
-    htim1.Instance->RCR = 1;
-    HAL_TIMEx_ConfigDeadTime(&htim1, dead1);
-    HAL_TIMEx_ConfigAsymmetricalDeadTime(&htim1, dead2);
-
-    // 等待 ADC 稳定和输入电压稳定.
-    HAL_Delay(5);
-    // 4KHz 定时器, 开始运行状态机
-    HAL_TIM_Base_Start_IT(&htim16);
+    Boards::startTimerBase();
 
     // 触发复位, 自动启动
     motorControlStatus.triggerReset = 1;
@@ -112,21 +98,8 @@ void triggerResetHandler()
     }
 }
 
-void Loop4KHz()
-{
-    if(motorControlStatus.enableFOCOutput == 0)
-    {
-        return;
-    }
 
-    if(motorControlConfig.enableSpeedCloseLoop)
-    {
-        velocityPID.setOutputLimit(FABS(motorControlConfig.defaultIqLimit));
-        motorControlStatus.targetIq = velocityPID(motorControlStatus.targetVelocity, Sensor::Encoder::encoderStatus.RAD_shaftAngularVelocity);
-    }
-}
-
-void Loop1KHz()
+void TIM_1KHzEntry()
 {
     ErrorHandler::checkError1KHz();
     ErrorHandler::checkIfCanAutoRecovery();
@@ -231,22 +204,14 @@ void Loop1KHz()
 
     else if (motorControlStatus.state == MotorControlState::ChargingBootCap)
     {
-        // 使能上管
-        HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_1);
-        HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_2);
-        HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_3);
-
-        HAL_TIMEx_ConfigDeadTime(&htim1, dead1);
-        HAL_TIMEx_ConfigAsymmetricalDeadTime(&htim1, dead2);
+        Boards::startTimerPWMLowSide();        
 
         // 已经充了 1ms, 直接开始正常运行
         // Control::FOC::setPhraseVoltage(0.06f, 0.0f);
         if(motorControlStatus.enableCalibration == 1)
         {
             // 使能上管
-            HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_1);
-            HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_2);
-            HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_3);
+            Boards::startTimerPWMHighSide();
             
             /* 停止正常开 FOC 的状态机 */
             motorControlStatus.state = MotorControlState::Stop;
@@ -270,9 +235,7 @@ void Loop1KHz()
         Drivers::LED::onOff(Drivers::LED::LEDFunctionType::DISPLAY_ERROR_ID, 0);
 
         // 使能上管
-        HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_1);
-        HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_2);
-        HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_3);
+        Boards::startTimerPWMHighSide();
 
         positionToCurrentPID.reset();
         positionToVelocityPID.reset();
@@ -301,41 +264,43 @@ void Loop1KHz()
         }
     }
 
-
-
     Drivers::LED::update();
 }
 
-
-extern "C" void HAL_ADCEx_InjectedConvCpltCallback(ADC_HandleTypeDef *hadc)
+void TIM_4KHzEntry()
 {
-    Sensor::ADC::decodeInjectedBuffer();
-    
-    Control::ErrorHandler::checkErrorHighFreq();
+    if(motorControlStatus.enableFOCOutput == 0)
+    {
+        return;
+    }
 
+    if(motorControlConfig.enableSpeedCloseLoop)
+    {
+        velocityPID.setOutputLimit(FABS(motorControlConfig.defaultIqLimit));
+        motorControlStatus.targetIq = velocityPID(motorControlStatus.targetVelocity, Sensor::Encoder::encoderStatus.RAD_shaftAngularVelocity);
+    }
+}
+
+void ADC_InjectedConvBeginEntry()
+{
+    /* Injected 采样开始 */
+    Sensor::Encoder::earlyRead();
+}
+
+void ADC_InjectedConvCpltEntry()
+{
+    /* Injected 采样完毕 */
+    Sensor::ADC::decodeInjectedBuffer();
+    Control::ErrorHandler::checkErrorHighFreq();
     Control::FOC::currentLoop();
 }
 
-
-extern "C" void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
+void ADC_RegularConvCpltEntry()
 {
-    if(htim->Instance == TIM1)
-    {
-        // 电流环同频率, 但是在 ADC 完成之前就能触发读取 Encoder.
-        Sensor::Encoder::readBlocking();
-    }
-    else if (htim->Instance == TIM16)
-    {
-        // 4KHz 中断
-        Control::MotorControl::Loop4KHz();
-        Loop4KHzCounter += 1;
-        if(Loop4KHzCounter == 4)
-        {
-            Loop4KHzCounter = 0;
-            Control::MotorControl::Loop1KHz();
-        }
-    }
+    /* Regular 采样完毕 */
+    Sensor::ADC::decodeRegularBuffer();
 }
+
 
 } // namespace MotorControl
 } // namespace Control

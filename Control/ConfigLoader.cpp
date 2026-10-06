@@ -343,7 +343,6 @@ ConfigLoaderError loadAllConfigFromFlash()
         return err;
     }
 
-    Sensor::ADC::ADCConfig adcConfig;
     Sensor::ADC::ADCCalibrationData adcCalibrationData;
     Sensor::Encoder::EncoderConfig encoderConfig;
     Control::FOC::MotorConfig motorConfig;
@@ -351,7 +350,6 @@ ConfigLoaderError loadAllConfigFromFlash()
     Control::MotorControl::MotorControlConfig motorControlConfig;
     Control::ErrorHandler::ErrorHandlerConfig errorHandlerConfig;
 
-    unpackConfigFromBuffer(ADCConfigAddr, &adcConfig, sizeof(Sensor::ADC::ADCConfig));
     unpackConfigFromBuffer(ADCCalibrationDataAddr, &adcCalibrationData, sizeof(Sensor::ADC::ADCCalibrationData));
     unpackConfigFromBuffer(EncoderConfigAddr, &encoderConfig, sizeof(Sensor::Encoder::EncoderConfig));
     unpackConfigFromBuffer(MotorConfigAddr, &motorConfig, sizeof(Control::FOC::MotorConfig));
@@ -370,7 +368,7 @@ ConfigLoaderError loadAllConfigFromFlash()
     unpackConfigFromBuffer(IqPIDParamAddr, &iqPIDParam, sizeof(Control::PIDParameters_t));
     unpackConfigFromBuffer(IdPIDParamAddr, &idPIDParam, sizeof(Control::PIDParameters_t));
 
-    Sensor::ADC::setConfig(&adcConfig, &adcCalibrationData);
+    Sensor::ADC::adcCalibrationData = adcCalibrationData;
     Sensor::Encoder::setConfig(&encoderConfig);
     Control::FOC::setMotorConfig(&motorConfig);
     Control::FOC::setFOCConfig(&focConfig);
@@ -395,23 +393,6 @@ ConfigLoaderError saveAllConfigToFlashAsync()
     return ConfigLoaderError::OperationStarted;
 }
 
-ConfigLoaderError loadADCConfigFromFlash()
-{
-    ConfigLoaderError err = loadConfigToBufferFromFlash();
-    if(err)
-    {
-        return err;
-    }
-
-    Sensor::ADC::ADCConfig adcConfig;
-    Sensor::ADC::ADCCalibrationData adcCalibrationData = Sensor::ADC::adcCalibrationData; // Keep existing calib data
-    
-    unpackConfigFromBuffer(ADCConfigAddr, &adcConfig, sizeof(Sensor::ADC::ADCConfig));
-    Sensor::ADC::setConfig(&adcConfig, &adcCalibrationData);
-    
-    return ConfigLoaderError::NoError;
-}
-
 ConfigLoaderError loadADCCalibrationDataFromFlash()
 {
     ConfigLoaderError err = loadConfigToBufferFromFlash();
@@ -420,11 +401,10 @@ ConfigLoaderError loadADCCalibrationDataFromFlash()
         return err;
     }
 
-    Sensor::ADC::ADCConfig adcConfig = Sensor::ADC::adcConfig; // Keep existing config
     Sensor::ADC::ADCCalibrationData adcCalibrationData;
 
     unpackConfigFromBuffer(ADCCalibrationDataAddr, &adcCalibrationData, sizeof(Sensor::ADC::ADCCalibrationData));
-    Sensor::ADC::setConfig(&adcConfig, &adcCalibrationData);
+    Sensor::ADC::adcCalibrationData = adcCalibrationData;
     
     return ConfigLoaderError::NoError;
 }

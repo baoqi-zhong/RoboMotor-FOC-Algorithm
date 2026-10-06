@@ -67,7 +67,6 @@ void update();
 ConfigLoaderError loadAllConfigFromFlash();
 ConfigLoaderError saveAllConfigToFlashAsync();
 
-ConfigLoaderError loadADCConfigFromFlash();
 ConfigLoaderError loadADCCalibrationDataFromFlash();
 ConfigLoaderError loadEncoderConfigFromFlash();
 ConfigLoaderError loadMotorConfigFromFlash();

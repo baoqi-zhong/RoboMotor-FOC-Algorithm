@@ -101,6 +101,12 @@ void setConfig(const MotorControlConfig* config);
 
 void init();
 
+void TIM_4KHzEntry();
+void TIM_1KHzEntry();
+void ADC_InjectedConvBeginEntry();
+void ADC_InjectedConvCpltEntry();
+void ADC_RegularConvCpltEntry();
+
 /**
  * @brief 处理 motorControlStatus.triggerReset == 1 的情况
  */

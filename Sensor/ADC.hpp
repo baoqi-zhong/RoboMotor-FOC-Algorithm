@@ -20,22 +20,6 @@ namespace Sensor
 {
 namespace ADC
 {
-struct AnalogValuePointers
-{
-    uint16_t *pIABuffer         = nullptr;
-    uint16_t *pIBBuffer         = nullptr;
-    uint16_t *pICBuffer         = nullptr;
-    uint16_t *pVbusBuffer       = nullptr;
-    uint16_t *pVABuffer         = nullptr;
-    uint16_t *pVBBuffer         = nullptr;
-    uint16_t *pVCBuffer         = nullptr;
-    uint16_t *pNTCBuffer        = nullptr;
-    uint16_t *pVREFINTBuffer    = nullptr;
-
-    uint16_t* pUserBuffer1      = nullptr;
-    uint16_t* pUserBuffer2      = nullptr;
-};
-
 struct AnalogValues
 {
     float measuredIA            = 0.0f;
@@ -94,15 +78,12 @@ struct ADCConfig
     ADCChannel VC_channel       = ADCChannel::DISABLED;
     ADCIndex NTC_hadc           = ADCIndex::DISABLED;
     ADCChannel NTC_channel      = ADCChannel::DISABLED;
-    ADCIndex VREFINT_hadc       = ADCIndex::DISABLED;
-    ADCChannel Vrefint_channel  = ADCChannel::DISABLED;
     ADCIndex user_hadc1         = ADCIndex::DISABLED;
     ADCChannel user_channel1    = ADCChannel::DISABLED;
     ADCIndex user_hadc2         = ADCIndex::DISABLED;
     ADCChannel user_channel2    = ADCChannel::DISABLED;
 
     uint8_t enableOPAMP             = 0;
-    uint8_t enableRegularChannels   = 0;
     uint8_t regularChannelNum       = 0;
 };
 
@@ -133,14 +114,10 @@ struct ADCCalibrationData
     float Vbus_GAIN     = 0.00779f;
     uint16_t NTC_BIAS   = 3000.0f;
     float NTC_GAIN      = -0.03f;
-
-    uint16_t Vrefint_GAIN = 0;
 };
 
-extern ADCConfig adcConfig;
+extern const ADCConfig& adcConfig;
 extern ADCCalibrationData adcCalibrationData;
-
-void setConfig(const ADCConfig* adcConfig, const ADCCalibrationData* adcCalibrationData);
 
 void start();
 

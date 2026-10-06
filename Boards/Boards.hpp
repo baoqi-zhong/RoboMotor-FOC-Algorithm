@@ -15,7 +15,26 @@
 
 #define BOARD_RM_DOCK_FOC   1
 
+namespace Sensor
+{
+namespace ADC
+{
+struct ADCConfig;
+struct ADCCalibrationData;
+} // namespace ADC
+} // namespace Sensor
+
 namespace Boards
 {
+    extern const Sensor::ADC::ADCConfig staticADCConfig;
+    extern const Sensor::ADC::ADCCalibrationData staticADCCalibrationData;
+
+    void startTimerBase();
+    void startTimerPWMLowSide();
+    void startTimerPWMHighSide();
+    void stopTimerPWM();
+    inline void setTimerPWMDutyCycle(float dutyCycleA, float dutyCycleB, float dutyCycleC);
+
+    void startAnalog();
     void init();
 } // namespace Boards
