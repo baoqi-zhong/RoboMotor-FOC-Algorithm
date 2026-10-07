@@ -12,123 +12,69 @@
 #include "ErrorHandler.hpp"
 #include "Math.hpp"
 
-#include "MotorControl.hpp"
-#include "ThreePhaseFOC.hpp"
+#include "FOC.hpp"
 #include "IncrementalPID.hpp"
 #include "PositionalPID.hpp"
 #include "ADC.hpp"
-#include "LED.hpp"
 #include "InterBoard.hpp"
 #include "ADC.hpp"
 #include "Encoder.hpp"
 
-namespace Control
+namespace Control::ErrorHandler
 {
-namespace ErrorHandler
-{
-ErrorStatus motorErrorStatus;
-ErrorCounter_t motorErrorCounter;
-ErrorHandlerConfig errorHandlerConfig;
 
 /*
   启动之后写入一个 magic number, 
   后续重启时检查这个 magic number, 如果读到了, 说明是不断电重启(热启动).
   定义为 noinit 是为了保证这个变量在软件重启时不会被清零.
 */
-static volatile __attribute__((section (".noinit"))) uint32_t hotStartMagicNumber;
-static volatile __attribute__((section (".noinit"))) uint32_t hardfaultCounter;
+// static volatile __attribute__((section (".noinit"))) uint32_t hotStartMagicNumber;
+// static volatile __attribute__((section (".noinit"))) uint32_t hardfaultCounter;
 
-void setConfig(const ErrorHandlerConfig *config)
+
+uint8_t ErrorHandler::checkIfAnyErrorStatus()
 {
-    errorHandlerConfig = *config;
-}
-
-void init()
-{
-    motorErrorStatus.underVoltage = 0;
-    motorErrorStatus.overVoltage = 0;
-    motorErrorStatus.overCurrent = 0;
-
-    motorErrorStatus.overTemperature = 0;
-    motorErrorStatus.underTemperautre = 0;
-    motorErrorStatus.encoderError = 0;  
-    motorErrorStatus.motorDisconnected = 0;
-
-    motorErrorStatus.STSPIN32G4MosfetDriverErrorStatus.I2C_CommunicationError = 0;
-    motorErrorStatus.STSPIN32G4MosfetDriverErrorStatus.VDSProtectionTriggered = 0;
-    motorErrorStatus.STSPIN32G4MosfetDriverErrorStatus.overTemperature = 0;
-    motorErrorStatus.STSPIN32G4MosfetDriverErrorStatus.underVoltage = 0;
-
-    motorErrorCounter.underVoltageCounter = 0;
-    motorErrorCounter.overVoltageCounter = 0;
-    motorErrorCounter.overCurrentCounter = 0;
-    motorErrorCounter.currnentSensorErrorCounter = 0;
-
-    motorErrorCounter.noErrorCounter = 0;
-
-    if(hotStartMagicNumber == 0xC0FFEE)
-    {
-        hardfaultCounter +=1 ;
-    }
-    else
-    {
-        hotStartMagicNumber = 0xC0FFEE;
-        hardfaultCounter = 0;
-    }
+    return errorStatus.underVoltage    || 
+        errorStatus.overVoltage        || 
+        errorStatus.overCurrent        ||
+        errorStatus.ADCDecoderError    ||
+        errorStatus.underTemperature   ||
+        errorStatus.overTemperature    || 
+        errorStatus.encoderError       ||
+        errorStatus.motorDisconnected;
 }
 
 
-uint8_t checkIfAnyErrorStatus()
+uint8_t ErrorHandler::checkIfStillInError(const Sensor::ADC::AnalogValues& analogValues)
 {
-    return motorErrorStatus.underVoltage    || 
-        motorErrorStatus.overVoltage        || 
-        motorErrorStatus.overCurrent        ||
-        motorErrorStatus.ADCDecoderError    ||
-        #if USE_NTC
-        motorErrorStatus.underTemperautre   ||
-        motorErrorStatus.overTemperature    || 
-        #endif
-        motorErrorStatus.encoderError       ||
-        motorErrorStatus.motorDisconnected  ||
-        motorErrorStatus.STSPIN32G4MosfetDriverErrorStatus.I2C_CommunicationError   ||
-        motorErrorStatus.STSPIN32G4MosfetDriverErrorStatus.VDSProtectionTriggered   ||
-        motorErrorStatus.STSPIN32G4MosfetDriverErrorStatus.overTemperature          ||
-        motorErrorStatus.STSPIN32G4MosfetDriverErrorStatus.underVoltage;
-}
-
-
-uint8_t checkIfStillInError()
-{
-    if(Sensor::ADC::analogValues.Vbus < errorHandlerConfig.underVoltageThreshold || Sensor::ADC::analogValues.Vbus > errorHandlerConfig.overVoltageThreshold)
+    if(analogValues.Vbus < errorHandlerConfig.underVoltageThreshold || analogValues.Vbus > errorHandlerConfig.overVoltageThreshold)
         return 1;
     
-    if(Sensor::ADC::analogValues.measuredIA > errorHandlerConfig.overCurrentThreshold || 
-        Sensor::ADC::analogValues.measuredIB > errorHandlerConfig.overCurrentThreshold || 
-        Sensor::ADC::analogValues.measuredIC > errorHandlerConfig.overCurrentThreshold ||
-        Sensor::ADC::analogValues.measuredIA < -errorHandlerConfig.overCurrentThreshold ||
-        Sensor::ADC::analogValues.measuredIB < -errorHandlerConfig.overCurrentThreshold ||
-        Sensor::ADC::analogValues.measuredIC < -errorHandlerConfig.overCurrentThreshold
+    if(analogValues.measuredIA > errorHandlerConfig.overCurrentThreshold || 
+        analogValues.measuredIB > errorHandlerConfig.overCurrentThreshold || 
+        analogValues.measuredIC > errorHandlerConfig.overCurrentThreshold ||
+        analogValues.measuredIA < -errorHandlerConfig.overCurrentThreshold ||
+        analogValues.measuredIB < -errorHandlerConfig.overCurrentThreshold ||
+        analogValues.measuredIC < -errorHandlerConfig.overCurrentThreshold
     )
         return 1;
     
-    if(FABS(Sensor::ADC::analogValues.measuredIphaseSum) > errorHandlerConfig.overCurrentThreshold / 5.0f)
+    if(FABS(analogValues.measuredIphaseSum) > errorHandlerConfig.overCurrentThreshold / 5.0f)
         return 1;
 
-    #if USE_NTC
-    if(NTCTemperature < errorHandlerConfig.underTemperatureThreshold || NTCTemperature > errorHandlerConfig.overTemperatureThreshold)
+    if(analogValues.NTCTemperature < errorHandlerConfig.underTemperatureThreshold || analogValues.NTCTemperature > errorHandlerConfig.overTemperatureThreshold)
         return 1;
-    #endif
 
     // 跑到这里代表电压电流已经正常, 如果有 driver fault 可以尝试触发复位
     // 下一次调用 CheckError1KHz 时会再次检查 driver fault
-    if(HAL_GPIO_ReadPin(nFAULT_GPIO_Port, nFAULT_Pin) == GPIO_PIN_RESET)
-    {
-        if(Drivers::STSPIN32G4MosfetDriver::clearFault())
-        {
-            motorErrorStatus.STSPIN32G4MosfetDriverErrorStatus.I2C_CommunicationError = 1;
-        }
-        return 1;
-    }
+    // if(HAL_GPIO_ReadPin(nFAULT_GPIO_Port, nFAULT_Pin) == GPIO_PIN_RESET)
+    // {
+    //     if(Drivers::STSPIN32G4MosfetDriver::clearFault())
+    //     {
+    //         errorStatus.STSPIN32G4MosfetDriverErrorStatus.I2C_CommunicationError = 1;
+    //     }
+    //     return 1;
+    // }
 
     
     return 0;
@@ -136,168 +82,141 @@ uint8_t checkIfStillInError()
 
 
 // 以 1KHz 频率调用
-void checkError1KHz()
+uint8_t ErrorHandler::checkError1KHz(const Sensor::ADC::AnalogValues& analogValues)
 {
-    if(errorHandlerConfig.ignoreAllErrors)
-        return;
+    uint8_t shouldDisableMotor = 0;
 
-    if(Sensor::ADC::analogValues.Vbus < errorHandlerConfig.underVoltageThreshold)
+    if(errorHandlerConfig.ignoreAllErrors)
+        return 0;
+
+    if(analogValues.Vbus < errorHandlerConfig.underVoltageThreshold)
     {
-        if(motorErrorCounter.underVoltageCounter < errorHandlerConfig.underVoltageTriggerTimeout)
+        if(errorCounter.underVoltageCounter < errorHandlerConfig.underVoltageTriggerTimeout)
         {
-            motorErrorCounter.underVoltageCounter ++;
+            errorCounter.underVoltageCounter ++;
         }
         else
         {
-            Control::FOC::disableFOC();
-            motorErrorStatus.underVoltage = 1;
-            Drivers::LED::blink(Drivers::LED::LEDFunctionType::DISPLAY_ERROR_ID, 2);
+            shouldDisableMotor = 1;
+            errorStatus.underVoltage = 1;
         }
     }
-    else if(Sensor::ADC::analogValues.Vbus > errorHandlerConfig.overVoltageThreshold)
+    else if(analogValues.Vbus > errorHandlerConfig.overVoltageThreshold)
     {
-        if(motorErrorCounter.overVoltageCounter < errorHandlerConfig.overVoltageTriggerTimeout)
+        if(errorCounter.overVoltageCounter < errorHandlerConfig.overVoltageTriggerTimeout)
         {
-            motorErrorCounter.overVoltageCounter ++;
+            errorCounter.overVoltageCounter ++;
         }
         else
         {
-            Control::FOC::disableFOC();
-            motorErrorStatus.overVoltage = 1;
-            Drivers::LED::blink(Drivers::LED::LEDFunctionType::DISPLAY_ERROR_ID, 3);
+            shouldDisableMotor = 1;
+            errorStatus.overVoltage = 1;
         }
     }
     else
     {
-        if(motorErrorCounter.underVoltageCounter)
-            motorErrorCounter.underVoltageCounter --;
-        if(motorErrorCounter.overVoltageCounter)
-            motorErrorCounter.overVoltageCounter --;
+        if(errorCounter.underVoltageCounter)
+            errorCounter.underVoltageCounter --;
+        if(errorCounter.overVoltageCounter)
+            errorCounter.overVoltageCounter --;
     }
 
     // 三相电流和不为 0
-    if(FABS(Sensor::ADC::analogValues.measuredIphaseSum) > errorHandlerConfig.overCurrentThreshold / 5.0f)
+    if(FABS(analogValues.measuredIphaseSum) > errorHandlerConfig.overCurrentThreshold / 5.0f)
     {
-        if(motorErrorCounter.currnentSensorErrorCounter < errorHandlerConfig.overCurrentTriggerTimeout)
+        if(errorCounter.currnentSensorErrorCounter < errorHandlerConfig.overCurrentTriggerTimeout)
         {
-            motorErrorCounter.currnentSensorErrorCounter ++;
+            errorCounter.currnentSensorErrorCounter ++;
         }
         else
         {
-            Control::FOC::disableFOC();
-            motorErrorStatus.ADCDecoderError = 1;
-            Drivers::LED::blink(Drivers::LED::LEDFunctionType::DISPLAY_ERROR_ID, 4);
+            shouldDisableMotor = 1;
+            errorStatus.ADCDecoderError = 1;
         }
     }
     else
     {
-        if(motorErrorCounter.currnentSensorErrorCounter)
-            motorErrorCounter.currnentSensorErrorCounter --;
+        if(errorCounter.currnentSensorErrorCounter)
+            errorCounter.currnentSensorErrorCounter --;
     }
 
 
     // 不需要累加的错误
-    if(Sensor::ADC::analogValues.NTCTemperature < errorHandlerConfig.underTemperatureThreshold)
+    if(analogValues.NTCTemperature < errorHandlerConfig.underTemperatureThreshold)
     {
-        Control::FOC::disableFOC();
-        motorErrorStatus.underTemperautre = 1;
-        Drivers::LED::blink(Drivers::LED::LEDFunctionType::DISPLAY_ERROR_ID, 5);
+        shouldDisableMotor = 1;
+        errorStatus.underTemperature = 1;
     }
-    else if(Sensor::ADC::analogValues.NTCTemperature > errorHandlerConfig.overTemperatureThreshold)
+    else if(analogValues.NTCTemperature > errorHandlerConfig.overTemperatureThreshold)
     {
-        Control::FOC::disableFOC();
-        motorErrorStatus.overTemperature = 1;
-        Drivers::LED::blink(Drivers::LED::LEDFunctionType::DISPLAY_ERROR_ID, 5);
+        shouldDisableMotor = 1;
+        errorStatus.overTemperature = 1;
     }
 
-    if(HAL_GPIO_ReadPin(nFAULT_GPIO_Port, nFAULT_Pin) == GPIO_PIN_RESET)
-    {
-        uint8_t status;
-        if(Drivers::STSPIN32G4MosfetDriver::readStatus(&status))
-        {
-            motorErrorStatus.STSPIN32G4MosfetDriverErrorStatus.I2C_CommunicationError = 1;
-        }
-        else
-        {
-            motorErrorStatus.STSPIN32G4MosfetDriverErrorStatus.I2C_CommunicationError   = 0;
-            motorErrorStatus.STSPIN32G4MosfetDriverErrorStatus.underVoltage             = status        & 0x01;
-            motorErrorStatus.STSPIN32G4MosfetDriverErrorStatus.overTemperature          = (status >> 1) & 0x01;
-            motorErrorStatus.STSPIN32G4MosfetDriverErrorStatus.VDSProtectionTriggered   = (status >> 2) & 0x01;
-        }
-        Drivers::LED::blink(Drivers::LED::LEDFunctionType::DISPLAY_ERROR_ID, 6);
-    }
+    return shouldDisableMotor;
 }
 
-void checkErrorHighFreq()
+uint8_t ErrorHandler::checkErrorHighFreq(const Sensor::ADC::AnalogValues& analogValues)
 {
     if(errorHandlerConfig.ignoreAllErrors)
-        return;
+        return 0;
 
-    if(Sensor::ADC::analogValues.measuredIA > errorHandlerConfig.overCurrentThreshold || 
-        Sensor::ADC::analogValues.measuredIB > errorHandlerConfig.overCurrentThreshold || 
-        Sensor::ADC::analogValues.measuredIC > errorHandlerConfig.overCurrentThreshold ||
-        Sensor::ADC::analogValues.measuredIA < -errorHandlerConfig.overCurrentThreshold ||
-        Sensor::ADC::analogValues.measuredIB < -errorHandlerConfig.overCurrentThreshold ||
-        Sensor::ADC::analogValues.measuredIC < -errorHandlerConfig.overCurrentThreshold
+    if(analogValues.measuredIA > errorHandlerConfig.overCurrentThreshold || 
+        analogValues.measuredIB > errorHandlerConfig.overCurrentThreshold || 
+        analogValues.measuredIC > errorHandlerConfig.overCurrentThreshold ||
+        analogValues.measuredIA < -errorHandlerConfig.overCurrentThreshold ||
+        analogValues.measuredIB < -errorHandlerConfig.overCurrentThreshold ||
+        analogValues.measuredIC < -errorHandlerConfig.overCurrentThreshold
     )
     {
-        if(motorErrorCounter.overCurrentCounter < errorHandlerConfig.overCurrentTriggerTimeout)
-            motorErrorCounter.overCurrentCounter ++;
+        if(errorCounter.overCurrentCounter < errorHandlerConfig.overCurrentTriggerTimeout)
+            errorCounter.overCurrentCounter ++;
         else
         {
-            motorErrorStatus.overCurrent = 1;
-            Control::FOC::disableFOC();
-            Drivers::LED::blink(Drivers::LED::LEDFunctionType::DISPLAY_ERROR_ID, 4);
+            errorStatus.overCurrent = 1;
+            return 1;
         }
     }
-    else if(motorErrorCounter.overCurrentCounter)
+    else if(errorCounter.overCurrentCounter)
     {
-        motorErrorCounter.overCurrentCounter --;
+        errorCounter.overCurrentCounter --;
     }
+
+    return 0;
 }
 
-void checkIfCanAutoRecovery()
+uint8_t ErrorHandler::checkIfCanAutoRecovery(const Sensor::ADC::AnalogValues& analogValues, uint8_t motorStopped, uint8_t triggerReset)
 {
     // 只有当有错误且不再处于错误状态时才进行 auto Recovery
-    if( Control::MotorControl::motorControlStatus.state                == Control::MotorControl::MotorControlState::Stop && 
-        errorHandlerConfig.enableAutoRecovery  == 1  && 
-        Control::ErrorHandler::checkIfAnyErrorStatus()    == 1  &&
-        Control::ErrorHandler::checkIfStillInError()      == 0  &&
-        Control::MotorControl::motorControlStatus.triggerReset         == 0)
+    if (motorStopped                                      == 1  && 
+        errorHandlerConfig.enableAutoRecovery               == 1  && 
+        checkIfAnyErrorStatus()                             == 1  &&
+        checkIfStillInError(analogValues)                   == 0  &&
+        triggerReset                                        == 0)
     {
         // 进行 auto Recovery
-        // 这里只 set 变量而不进行真正的 Trigger reset 是希望能通过 CAN 调用触发 reset.
-        motorErrorCounter.noErrorCounter ++;
-        if(motorErrorCounter.noErrorCounter > errorHandlerConfig.autoRecoveryTimeout)
+        // 这里只 set 变量而不进行真正的 Trigger reset 是希望提供另一条路径, 通过 CAN/Ozone 触发 reset.
+        errorCounter.noErrorCounter ++;
+        if(errorCounter.noErrorCounter > errorHandlerConfig.autoRecoveryTimeout)
         {
-            Control::MotorControl::motorControlStatus.triggerReset = 1;
-            motorErrorCounter.noErrorCounter = 0;
+            errorCounter.noErrorCounter = 0;
+            return 1;
         }
     }
+
+    return 0;
 }
 
-void clearAllError()
+void ErrorHandler::clearAllError()
 {
-    motorErrorStatus.underVoltage       = 0;
-    motorErrorStatus.overVoltage        = 0;
-    motorErrorStatus.overCurrent        = 0;
-    motorErrorStatus.ADCDecoderError    = 0;
-    motorErrorStatus.overTemperature    = 0;
-    motorErrorStatus.underTemperautre   = 0;
-    motorErrorStatus.encoderError       = 0;
-    motorErrorStatus.motorDisconnected  = 0;
-    motorErrorStatus.STSPIN32G4MosfetDriverErrorStatus.I2C_CommunicationError = 0;
-    motorErrorStatus.STSPIN32G4MosfetDriverErrorStatus.VDSProtectionTriggered = 0;
-    motorErrorStatus.STSPIN32G4MosfetDriverErrorStatus.overTemperature        = 0;
-    motorErrorStatus.STSPIN32G4MosfetDriverErrorStatus.underVoltage           = 0;
+    errorStatus.underVoltage       = 0;
+    errorStatus.overVoltage        = 0;
+    errorStatus.overCurrent        = 0;
+    errorStatus.ADCDecoderError    = 0;
+    errorStatus.overTemperature    = 0;
+    errorStatus.underTemperature   = 0;
+    errorStatus.encoderError       = 0;
+    errorStatus.motorDisconnected  = 0;
 }
 
-
-// Hardfault / Watchdog 引起的严重错误处理.
-void GGHandler()
-{
-    HAL_NVIC_SystemReset();
-}
-
-} // namespace ErrorHandler
-} // namespace Control
+} // namespace Control::ErrorHandler

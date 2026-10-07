@@ -11,6 +11,8 @@
  */
 #include "STSPIN32G4MosfetDriver.hpp"
 
+#if (PLATFORM_ST)
+
 namespace Drivers
 {
 namespace STSPIN32G4MosfetDriver
@@ -60,7 +62,7 @@ uint8_t readStatus(uint8_t *status)
 uint8_t init()
 {
     // 必须 24v 上电, 才能读到 I2C. mos 驱动需要 24v 供电
-    HAL_GPIO_WritePin(PS_WAKE_GPIO_Port, PS_WAKE_Pin, GPIO_PIN_SET);
+    HAL_GPIO_WritePin(STSPIN32G4_MOS_DRIVER_ENABLE_GPIO_Port, STSPIN32G4_MOS_DRIVER_ENABLE_Pin, GPIO_PIN_SET);
     HAL_Delay(1);
 
     // Reset all register to default value
@@ -104,3 +106,5 @@ uint8_t clearFault()
 
 } // namespace STSPIN32G4MosfetDriver
 } // namespace Drivers
+
+#endif // PLATFORM_ST

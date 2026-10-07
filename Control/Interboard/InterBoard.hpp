@@ -10,6 +10,7 @@
  * See the LICENSE file in the project root for full license text.
  */
 #pragma once
+#if 0
 
 #include "main.h"
 #include "stdint.h"
@@ -71,3 +72,5 @@ void handler1KHz();
 
 } // namespace InterBoard
 } // namespace Control
+
+#endif

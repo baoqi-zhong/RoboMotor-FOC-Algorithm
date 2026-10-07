@@ -17,13 +17,11 @@ namespace Control
 namespace InterBoard
 {
 #include "ErrorHandler.hpp"
-#include "MotorControl.hpp"
+#include "Motor.hpp"
 #include "PositionalPID.hpp"
 #include "IncrementalPID.hpp"
 #include "Encoder.hpp"
-#if USE_NTC
 #include "ADC.hpp"
-#endif
 
 /*
 * 通信协议
@@ -139,11 +137,11 @@ void InterBoard_Decode(uint32_t CANId, uint8_t* rxBuffer)
     {
         if(rxBuffer[0] & CONTROL_PACKET_ENABLE_MOTOR_MASK)
         {
-            motorControlStatus.enableMotor = rxBuffer[1] & 0x01;
+            MotorStatus.enableMotor = rxBuffer[1] & 0x01;
         }
 
         if(rxBuffer[0] & CONTROL_PACKET_AUTO_RESET_MASK)
-            motorControlStatus.enableAutoRecovery = (rxBuffer[1] & CONTROL_PACKET_AUTO_RESET_MASK) >> 2;
+            MotorStatus.enableAutoRecovery = (rxBuffer[1] & CONTROL_PACKET_AUTO_RESET_MASK) >> 2;
   
         if(rxBuffer[0] & CONTROL_PACKET_IGNORE_ERROR_MASK)
             Control::ErrorHandler::errorHandlerConfig.ignoreAllErrors = (rxBuffer[1] & CONTROL_PACKET_IGNORE_ERROR_MASK) >> 3;
@@ -154,11 +152,11 @@ void InterBoard_Decode(uint32_t CANId, uint8_t* rxBuffer)
             {
                 IncrementalPIDreset(&IqPID);
                 IncrementalPIDreset(&IdPID);
-                motorControlConfig.FOCControlMode = CURRENT_TOURQUE_CONTROL;
+                MotorConfig.FOCControlMode = CURRENT_TOURQUE_CONTROL;
             }
             else
             {
-                motorControlConfig.FOCControlMode = VOLTAGE_TOURQUE_CONTROL;     
+                MotorConfig.FOCControlMode = VOLTAGE_TOURQUE_CONTROL;     
             }
         }
 
@@ -168,12 +166,12 @@ void InterBoard_Decode(uint32_t CANId, uint8_t* rxBuffer)
             {
                 PositionalPIDreset(&velocityPID);
                 PositionalPIDreset(&positionToVelocityPID);
-                motorControlStatus.enableSpeedCloseLoop = 1;            
+                MotorStatus.enableSpeedCloseLoop = 1;            
             }
             else
             {
                 PositionalPIDreset(&positionToCurrentPID);
-                motorControlStatus.enableSpeedCloseLoop = 0;
+                MotorStatus.enableSpeedCloseLoop = 0;
             }
         }
 
@@ -181,26 +179,26 @@ void InterBoard_Decode(uint32_t CANId, uint8_t* rxBuffer)
         {
             if(rxBuffer[1] & CONTROL_PACKET_POSITION_CONTROL_MASK)
             {
-                if(motorControlStatus.enableSpeedCloseLoop)
+                if(MotorStatus.enableSpeedCloseLoop)
                     PositionalPIDreset(&positionToVelocityPID);
                 else
                     PositionalPIDreset(&positionToCurrentPID);
-                motorControlStatus.enablePositionCloseLoop = 1;
+                MotorStatus.enablePositionCloseLoop = 1;
             }
             else
             {
-                if(motorControlStatus.enableSpeedCloseLoop)
-                motorControlStatus.enablePositionCloseLoop = 0;
+                if(MotorStatus.enableSpeedCloseLoop)
+                MotorStatus.enablePositionCloseLoop = 0;
             }
         }
             
-        motorControlConfig.IqLimit = (float)((int16_t)(rxBuffer[2] << 8 | rxBuffer[3])) / 10000.0f;
-        motorControlConfig.velocityLimit = (float)((int16_t)(rxBuffer[4] << 8 | rxBuffer[5])) / 1000.0f;
-        motorControlStatus.targetPosition += (float)((int16_t)(rxBuffer[6] << 8 | rxBuffer[7])) / 10.0f;
+        MotorConfig.IqLimit = (float)((int16_t)(rxBuffer[2] << 8 | rxBuffer[3])) / 10000.0f;
+        MotorConfig.velocityLimit = (float)((int16_t)(rxBuffer[4] << 8 | rxBuffer[5])) / 1000.0f;
+        MotorStatus.targetPosition += (float)((int16_t)(rxBuffer[6] << 8 | rxBuffer[7])) / 10.0f;
         // 最后触发复位
         if(rxBuffer[1] & CONTROL_PACKET_TRIGGER_RESET_MASK)
         {
-            motorControlStatus.triggerReset = 1;
+            MotorStatus.triggerReset = 1;
         }
     }
 }
@@ -211,28 +209,28 @@ void InterBoard_TransmitFeedback()
         InterBoardTxBuffer[i] = 0;
     
     uint8_t temp = 0;
-    if(motorControlStatus.enablePositionCloseLoop)
+    if(MotorStatus.enablePositionCloseLoop)
         temp |= RESPONSE_PACKET_POSITION_CONTROL_MASK;
-    if(motorControlStatus.enableSpeedCloseLoop)
+    if(MotorStatus.enableSpeedCloseLoop)
         temp |= RESPONSE_PACKET_SPEED_CONTROL_MASK;
-    if(motorControlConfig.FOCControlMode == VOLTAGE_TOURQUE_CONTROL)
+    if(MotorConfig.FOCControlMode == VOLTAGE_TOURQUE_CONTROL)
         temp |= RESPONSE_PACKET_TORQUE_CONTROL_MASK;
     if(Control::ErrorHandler::errorHandlerConfig.ignoreAllErrors)
         temp |= RESPONSE_PACKET_IGNORE_ERROR_MASK;
-    if(motorControlStatus.enableAutoRecovery)
+    if(MotorStatus.enableAutoRecovery)
         temp |= RESPONSE_PACKET_AUTO_RESET_MASK;
-    if(motorControlStatus.enableFOCOutput)
+    if(MotorStatus.enableFOCOutput)
         temp |= RESPONSE_PACKET_ENABLE_MOTOR_MASK;
     InterBoardTxBuffer[0] = temp;
 
     temp = 0;
-    if(motorErrorStatus.overTemperature)
+    if(errorStatus.overTemperature)
         temp |= RESPONSE_PACKET_OVER_TEMPERATURE_MASK;
-    if(motorErrorStatus.overCurrent)
+    if(errorStatus.overCurrent)
         temp |= RESPONSE_PACKET_OVER_CURRENT_MASK;
-    if(motorErrorStatus.underVoltage)
+    if(errorStatus.underVoltage)
         temp |= RESPONSE_PACKET_UNDER_VOLTAGE_MASK;
-    if(motorErrorStatus.overVoltage)
+    if(errorStatus.overVoltage)
         temp |= RESPONSE_PACKET_OVER_VOLTAGE_MASK;
     if(ErrorHandler_CheckIfAnyErrorStatus())
         temp |= RESPONSE_PACKET_ANY_ERROR_MASK;

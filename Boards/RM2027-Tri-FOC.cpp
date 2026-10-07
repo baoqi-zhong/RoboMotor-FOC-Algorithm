@@ -1,6 +1,6 @@
 /**
- * @file RM-Dock-FOC.cpp
- * @brief RM-Dock-FOC board specific hardware configuration.
+ * @file RM2027-Tri-FOC.cpp
+ * @brief RM2027-Tri-FOC board specific hardware configuration.
  * @author baoqi-zhong (zzhongas@connect.ust.hk)
  *
  * Part of RoboMotor-FOC-Algorithm.
@@ -11,12 +11,10 @@
  */
 
 #include "Boards.hpp"
-#if (BOARD_RM_DOCK_FOC)
+#if (BOARD_RM2027_TRI_FOC)
 
 #include "main.h"
 #include "adc.h"
-#include "opamp.h"
-#include "tim.h"
 
 #include "WS2812.hpp"
 #include "FOC.hpp"
@@ -29,16 +27,16 @@
 
 namespace Boards
 {
-constexpr float CurrentLoopFreq = 20000.0f;
+constexpr float CurrentLoopFreq = 27200.0f;
 
 constexpr Control::FOC::MotorConfig motorConfig = {
     .REVERSE_DIRECTION              = 0,
     .POLE_PAIRS                     = 7,
     .shaftReductionRatio            = 1.0f,
     .electricAngleReductionRatio    = 7.0f,
-    .phaseResistance                = 0.2f,
-    .phaseInductance                = 0.0004f,
-    .kv                             = 350.0f,
+    .phaseResistance                = 0.0f,
+    .phaseInductance                = 0.0f,
+    .kv                             = 0.0f,
 };
 
 constexpr Control::FOC::FOCConfig focConfig = {

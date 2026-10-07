@@ -12,8 +12,8 @@
 #if 0
 
 #include "MotorBuzzer.hpp"
-#include "ThreePhaseFOC.hpp"
-#include "MotorControl.hpp"
+#include "FOC.hpp"
+#include "Motor.hpp"
 
 namespace Control
 {
@@ -67,7 +67,7 @@ void stop()
     // 停止播放, 清空队列
     motorBuzzerStatus.head = 0;
     motorBuzzerStatus.tail = 0;
-    Control::MotorControl::motorControlStatus.targetIq = 0.0f;
+    Control::Motor::MotorStatus.targetIq = 0.0f;
 
     __HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_1, 0);
     __HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_2, 0);

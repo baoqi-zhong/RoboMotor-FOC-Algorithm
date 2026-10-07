@@ -19,6 +19,11 @@ PositionalPID::PositionalPID()
     this->reset();
 }
 
+PositionalPID::PositionalPID(const PIDParameters_t& parameters_)
+{
+    this->setParameters(parameters_);
+}
+
 void PositionalPID::setParameters(const PIDParameters_t& parameters_)
 {
     assert_param(parameters_.outputLimit >= 0.0f);

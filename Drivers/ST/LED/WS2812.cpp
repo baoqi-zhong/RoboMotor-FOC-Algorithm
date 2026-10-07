@@ -11,6 +11,8 @@
  */
 #include "WS2812.hpp"
 
+#if (PLATFORM_ST)
+
 namespace Drivers
 {
 namespace LED
@@ -123,3 +125,5 @@ void WS2812Group::transmit()
 
 } // namespace LED
 } // namespace Drivers
+
+#endif // PLATFORM_ST

@@ -13,9 +13,7 @@
 
 
 #include "main.h"
-#include "tim.h"
 #include "stdint.h"
-
 
 namespace Control
 {
@@ -35,6 +33,7 @@ class PositionalPID
 {
 public:
     PositionalPID();
+    explicit PositionalPID(const PIDParameters_t& parameters_);
     void setParameters(const PIDParameters_t& parameters_);
     PIDParameters_t getParameters() const { return this->parameters; }
     void setOutputLimit(float outputLimit_) { this->parameters.outputLimit = outputLimit_; }

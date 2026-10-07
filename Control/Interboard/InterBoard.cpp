@@ -9,11 +9,12 @@
  * This file is licensed under the MIT License.
  * See the LICENSE file in the project root for full license text.
  */
+#if 0
 #include "InterBoard.hpp"
 
-#include "FDCANManager.hpp"
-#include "MotorControl.hpp"
-#include "ThreePhaseFOC.hpp"
+#include "CANManager.hpp"
+#include "Motor.hpp"
+#include "FOC.hpp"
 #include "PositionalPID.hpp"
 #include "IncrementalPID.hpp"
 #include "Encoder.hpp"
@@ -27,7 +28,7 @@ InterBoardStatus interBoardStatus;
 
 uint8_t InterBoardTxBuffer[8] = {0};
 
-extern void decode(uint32_t CANId, uint8_t* rxBuffer);
+extern void decode(uint32_t CANId, const uint8_t* rxBuffer);
 
 void setConfig(const InterBoardConfig* config)
 {
@@ -36,8 +37,8 @@ void setConfig(const InterBoardConfig* config)
 
 void init()
 {
-    Drivers::FDCANManager::registerCallback(decode);
-    Drivers::FDCANManager::init(&hfdcan1, interBoardConfig.CANFilterMask, interBoardConfig.CANFilterID);
+    Drivers::CANManager::registerCallback(decode);
+    Drivers::CANManager::init(interBoardConfig.CANFilterMask, interBoardConfig.CANFilterID);
 
     interBoardStatus.disconnectCounter              = 0;
     interBoardStatus.connectionStatus               = 0;
@@ -70,9 +71,9 @@ void handler1KHz()
     {
         interBoardStatus.connectionStatus = 0;
         // 不应该直接 disableFOC. 应该保证电流环运行, 其他环关闭
-        // motorControlStatus.targetIq = 0;
-        // motorControlStatus.enablePositionCloseLoop = 0;
-        // motorControlStatus.enableSpeedCloseLoop = 0;
+        // MotorStatus.targetIq = 0;
+        // MotorStatus.enablePositionCloseLoop = 0;
+        // MotorStatus.enableSpeedCloseLoop = 0;
     }
     else
     {
@@ -82,3 +83,5 @@ void handler1KHz()
 
 } // namespace InterBoard
 } // namespace Control
+
+#endif

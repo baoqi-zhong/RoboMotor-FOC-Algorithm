@@ -9,18 +9,24 @@
  * This file is licensed under the MIT License.
  * See the LICENSE file in the project root for full license text.
  */
-#include "LED.hpp"
+#include "../../Generic/LED.hpp"
+
+#if (PLATFORM_ST)
 #include "WS2812.hpp"
 
 namespace Drivers
 {
 namespace LED
 {
+namespace
+{
+GenericLED* LEDPool[MAX_LED_NUM] = {nullptr};
+}
+
 /*
     无论对于 GPIO 与 TIMER, WS2812, 一个 GenericLED 就对应一个 LED
     对于 WS2812, 在 transmit 的时候注意不要多次调用
 */
-GenericLED* LEDPool[MAX_LED_NUM] = {nullptr};
 
 
 void registerLED(GenericLED* led)
@@ -129,3 +135,5 @@ void GenericLED::onOff(uint8_t on)
 
 } // namespace LED
 } // namespace Drivers
+
+#endif // PLATFORM_ST

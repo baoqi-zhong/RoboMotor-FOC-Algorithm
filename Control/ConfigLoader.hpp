@@ -11,14 +11,15 @@
  */
 #pragma once
 
+#if 0
 #include "main.h"
 #include "stdint.h"
 
 #include "ADC.hpp"
 #include "Encoder.hpp"
 #include "PositionalPID.hpp"
-#include "ThreePhaseFOC.hpp"
-#include "MotorControl.hpp"
+#include "FOC.hpp"
+#include "Motor.hpp"
 #include "ErrorHandler.hpp"
 #include "InterBoard.hpp"
 
@@ -71,7 +72,7 @@ ConfigLoaderError loadADCCalibrationDataFromFlash();
 ConfigLoaderError loadEncoderConfigFromFlash();
 ConfigLoaderError loadMotorConfigFromFlash();
 ConfigLoaderError loadFOCConfigFromFlash();
-ConfigLoaderError loadMotorControlFromFlash();
+ConfigLoaderError loadMotorFromFlash();
 ConfigLoaderError loadErrorHandlerConfigFromFlash();
 ConfigLoaderError loadPIDConfigFromFlash(PIDType pidType);
 
@@ -79,3 +80,5 @@ ConfigLoaderError waitForLastOperation(uint32_t timeout);
 
 } // namespace ConfigLoader
 } // namespace Control
+
+#endif

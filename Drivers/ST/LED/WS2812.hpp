@@ -9,9 +9,14 @@
  * This file is licensed under the MIT License.
  * See the LICENSE file in the project root for full license text.
  */
-#include "LED.hpp"
-#include "tim.h"
-#include "stdint.h"
+#pragma once
+
+#include "../../Generic/LED.hpp"
+
+#if (PLATFORM_ST)
+#include "main.h"
+#include "stm32g4xx_hal_tim.h"
+#include <stdint.h>
 
 namespace Drivers
 {
@@ -64,3 +69,5 @@ private:
 
 } // namespace LED
 } // namespace Drivers
+
+#endif // PLATFORM_ST

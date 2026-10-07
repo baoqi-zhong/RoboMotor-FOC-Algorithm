@@ -58,7 +58,6 @@ int32_t floatToCordic31(float floatingValue)
         floatingValue = CORDIC_MIN_FLOAT;
     }
     return (int32_t)(floatingValue * 0x80000000);
-    ;
 }
 
 float cordic31ToFloat(int32_t cordic31)

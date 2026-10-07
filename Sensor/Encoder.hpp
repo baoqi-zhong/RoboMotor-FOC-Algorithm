@@ -11,106 +11,162 @@
  */
 #pragma once
 
-
-
-#include "MA732.hpp"
-#include "M3508_LinerHallEncoder.hpp"
 #include "LPF.hpp"
+#include "Math.hpp"
+
+#include "stdint.h"
 
 namespace Sensor
 {
-namespace Encoder
+struct EncoderConfigStatic
 {
-enum class EncoderDriverType : uint8_t
-{
-    None = 0,
-    MA732 = 1,
-    M3508_LinerHallEncoder = 2
+    float updateFrequency               = 1000.0f;
+    float shaftReductionRatio           = 1.0f;
+    float electricAngleReductionRatio   = 1.0f;
 };
 
-struct EncoderStatus
+struct EncoderConfig
 {
-    // Private
-    // Encoder 本身无量纲, 不应在外部使用
+    uint16_t zeroOffset             = 0;
+    uint8_t direction               = 1;
+    int8_t compensationTable[64]    = {0};
+    float compensationGain          = 1.0f;
+    uint8_t enableCompensation      = 1;
+    float delayTime                 = 0.0f;
+    float LPFAlpha                  = 0.01f;
+};
+
+template<EncoderConfigStatic encoderConfigStatic>
+class Encoder
+{
+public:
+    Encoder(const EncoderConfig& encoderConfig_ = EncoderConfig()) : encoderConfig(encoderConfig_), encoderDifferenceLPF(encoderConfig.LPFAlpha) {}
+    
+    int16_t getCompensation(uint16_t rawAngle);
+    uint16_t getEncoderAfterCompensation(uint16_t rawAngle);
+    void init(uint16_t Q16_encoder_);
+    void update(uint16_t Q16_encoder_);
+    void setZeroSoftware();
+
+    EncoderConfig encoderConfig;
+    Utils::LPF encoderDifferenceLPF;
+
+    int16_t     Q16_electricAngle               = 0;
+    int16_t     Q16_deltaElectricAngleLPF       = 0;
+    int32_t     Q16_electricAngularVelocity     = 0;
+    float       RAD_electricAngularVelocity     = 0.0f;
+
+    float       RAD_accumulatedShaftAngle       = 0.0f;
+    float       RAD_shaftAngularVelocity        = 0.0f;
+    float       RPM_shaftAngularVelocity        = 0.0f;
+
+private:
+    bool        initialized                     = false;
+
     uint16_t    Q16_encoder                     = 0;
     uint16_t    Q16_lastEncoder                 = 0;
     int32_t     Q16_accumulatedEncoder          = 0;
 
     int16_t     Q16_encoderDifference           = 0;
-    float       F16_encoderDifferenceLPF   = 0.0f;
-
-    // Public
-    int16_t     Q16_electricAngle               = 0;
-    int16_t     Q16_deltaElectricAngleLPF       = 0;    // 电角度每采样周期
-    int32_t     Q16_electricAngularVelocity     = 0;    // 电角度每秒
-    float       RAD_electricAngularVelocity     = 0.0f; // 电角速度, rad/s
-
-    float       RAD_accumulatedShaftAngle       = 0.0f; // 输出轴累积角度, rad
-    float       RAD_shaftAngularVelocity        = 0.0f; // 输出轴角速度, rad/s
-
-    float       RPM_shaftAngularVelocity        = 0.0f; // 输出轴角速度, rpm
+    float       F16_encoderDifferenceLPF        = 0.0f;
 };
 
-struct EncoderConfig
+template<EncoderConfigStatic encoderConfigStatic>
+int16_t Encoder<encoderConfigStatic>::getCompensation(uint16_t rawAngle)
 {
-    EncoderDriverType driverType        = EncoderDriverType::None;
-    uint16_t encoderZeroOffset          = 0;        // 编码器零点偏移
-    uint8_t encoderDirection            = 1;        // 编码器方向
-    int8_t encoderCompensationTable[64] = {0};      // 编码器偏移表, 用于校正编码器误差
-    float encoderCompensationGain       = 1.0f;     // 编码器偏移增益, 用于放大或缩小校正值
-    uint8_t enableEncoderCompensation   = 1;
+    uint8_t index = rawAngle >> 10;
+    uint8_t nextIndex = (index + 1) % 64;
+    uint16_t remainder = rawAngle & 0x3FF;
 
-    float encoderDelayTime              = 0.0f;     // 单位 us
-    float encoderDifferenceLPFAlpha      = 0.01f;    // 编码器差分的低通滤波系数, 用于滤除编码器差分的高频噪声
-};
+    int16_t compensation = encoderConfig.compensationTable[index];
+    int16_t nextCompensation = encoderConfig.compensationTable[nextIndex];
+    compensation += (int32_t)(nextCompensation - compensation) * (int32_t)remainder / 1024;
+    return compensation * encoderConfig.compensationGain;
+}
 
-extern EncoderConfig encoderConfig;
-extern EncoderStatus encoderStatus;
+template<EncoderConfigStatic encoderConfigStatic>
+uint16_t Encoder<encoderConfigStatic>::getEncoderAfterCompensation(uint16_t rawAngle)
+{
+    if(encoderConfig.enableCompensation == 0)
+        return rawAngle;
 
-/**
- * @brief Normalizes an angle to be within the range [0, 2*pi).
- * 
- * @param _angle The angle to be normalized.
- * @return The normalized angle.
- */
-float normalizeAngleZeroToTwoPi(float _angle);
+    return rawAngle - getCompensation(rawAngle);
+}
 
-/**
- * @brief Normalizes an angle to be within the range [-pi, pi).
- * 
- * @param _angle The angle to be normalized.
- * @return The normalized angle.
- */
-float normalizeAngleNegPiToPi(float _angle);
+template<EncoderConfigStatic encoderConfigStatic>
+void Encoder<encoderConfigStatic>::init(uint16_t Q16_encoder_)
+{
+    uint16_t compensatedEncoder = getEncoderAfterCompensation(Q16_encoder_ - encoderConfig.zeroOffset);
+    Q16_encoder = encoderConfig.direction ? compensatedEncoder : -compensatedEncoder;
+    Q16_lastEncoder = Q16_encoder;
+    Q16_accumulatedEncoder = Q16_encoder;
+    initialized = true;
 
+    Q16_encoderDifference = 0;
+    F16_encoderDifferenceLPF = 0.0f;
+    Q16_electricAngle = 0;
+    Q16_deltaElectricAngleLPF = 0;
+    Q16_electricAngularVelocity = 0;
+    RAD_electricAngularVelocity = 0.0f;
+    RAD_accumulatedShaftAngle = 0.0f;
+    RAD_shaftAngularVelocity = 0.0f;
+    RPM_shaftAngularVelocity = 0.0f;
+}
 
-int16_t getCompensation(uint16_t rawAngle);
-uint16_t getEncoderAfterCompensation(uint16_t rawAngle);
+template<EncoderConfigStatic encoderConfigStatic>
+void Encoder<encoderConfigStatic>::update(uint16_t Q16_encoder_)
+{
+    uint16_t compensatedEncoder = getEncoderAfterCompensation(Q16_encoder_ - encoderConfig.zeroOffset);
+    uint16_t currentEncoder = encoderConfig.direction ? compensatedEncoder : -compensatedEncoder;
 
-void setConfig(const EncoderConfig* config);
+    if(!initialized)
+    {
+        Q16_encoder = currentEncoder;
+        Q16_lastEncoder = currentEncoder;
+        Q16_accumulatedEncoder = currentEncoder;
+        initialized = true;
+    }
+    else
+    {
+        Q16_lastEncoder = Q16_encoder;
+        Q16_encoder = currentEncoder;
+    }
 
-/**
- * @brief Initializes the encoder.
- */
-void init();
+    Q16_encoderDifference = Q16_encoder - Q16_lastEncoder;
+    Q16_accumulatedEncoder += Q16_encoderDifference;
 
-/**
- * @brief Reads data from the encoder in a blocking manner.
- */
-void readBlocking();
+    F16_encoderDifferenceLPF = encoderDifferenceLPF(Q16_encoderDifference);
 
+    float RAD_encoderDifferenceLPFFloat = F16_encoderDifferenceLPF / 65536.0f * TWO_PI * encoderConfigStatic.updateFrequency;
+    RAD_accumulatedShaftAngle = Q16_accumulatedEncoder / 65536.0f * TWO_PI * encoderConfigStatic.shaftReductionRatio;
+    RAD_shaftAngularVelocity = RAD_encoderDifferenceLPFFloat * encoderConfigStatic.shaftReductionRatio;
+    RPM_shaftAngularVelocity = RAD_shaftAngularVelocity * RAD_PER_S_TO_RPM_RATIO;
+    RAD_electricAngularVelocity = RAD_encoderDifferenceLPFFloat * encoderConfigStatic.electricAngleReductionRatio;
+    Q16_electricAngularVelocity = RAD_electricAngularVelocity / TWO_PI * 65536.0f;
 
-void earlyRead();
+    Q16_deltaElectricAngleLPF = F16_encoderDifferenceLPF * encoderConfigStatic.electricAngleReductionRatio;
+    int32_t estimateAccumulatedEncoder = Q16_accumulatedEncoder + (int32_t)(F16_encoderDifferenceLPF * (encoderConfig.delayTime * encoderConfigStatic.updateFrequency / 1000000.0f));
+    int32_t Q16_electricAngle_ = (int32_t)((estimateAccumulatedEncoder % 65536) * encoderConfigStatic.electricAngleReductionRatio) % 65536;
+    if(Q16_electricAngle_ > 32767)
+        Q16_electricAngle_ -= 65536;
+    else if(Q16_electricAngle_ < -32768)
+        Q16_electricAngle_ += 65536;
+    Q16_electricAngle = Q16_electricAngle_;
+}
 
-/**
- * @brief Sets the electric angle to 0.
- */
-void setZeroSoftware();
+template<EncoderConfigStatic encoderConfigStatic>
+void Encoder<encoderConfigStatic>::setZeroSoftware()
+{
+    Q16_accumulatedEncoder        = 0;
+    Q16_electricAngle             = 0;
+    F16_encoderDifferenceLPF      = 0.0f;
+    Q16_encoderDifference         = 0;
+    Q16_deltaElectricAngleLPF     = 0;
+    Q16_electricAngularVelocity   = 0;
+    RAD_electricAngularVelocity   = 0.0f;
+    RAD_accumulatedShaftAngle     = 0.0f;
+    RAD_shaftAngularVelocity      = 0.0f;
+    RPM_shaftAngularVelocity      = 0.0f;
+}
 
-/**
- * @brief Write encoder offset to sensor registers (if possible).
- */
-void setZeroHardware();
-
-} // namespace Encoder
 } // namespace Sensor

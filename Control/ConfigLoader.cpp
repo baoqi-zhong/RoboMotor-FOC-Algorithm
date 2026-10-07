@@ -9,6 +9,7 @@
  * This file is licensed under the MIT License.
  * See the LICENSE file in the project root for full license text.
  */
+#if 0
 #include "ConfigLoader.hpp"
 #include "FlashManager.hpp"
 #include "crc.h"
@@ -44,7 +45,7 @@ constexpr uint16_t EncoderConfigMaxSize           = alignedSizeOf((uint16_t)(siz
 constexpr uint16_t MotorConfigMaxSize             = alignedSizeOf((uint16_t)(sizeof(Control::FOC::MotorConfig)));
 constexpr uint16_t encoderCompensationTableSize   = 128;
 constexpr uint16_t FOCConfigMaxSize               = alignedSizeOf((uint16_t)(sizeof(Control::FOC::FOCConfig)));
-constexpr uint16_t MotorControlConfigMaxSize      = alignedSizeOf((uint16_t)(sizeof(Control::MotorControl::MotorControlConfig)));
+constexpr uint16_t MotorConfigMaxSize      = alignedSizeOf((uint16_t)(sizeof(Control::Motor::MotorConfig)));
 constexpr uint16_t ErrorHandlerConfigMaxSize      = alignedSizeOf((uint16_t)(sizeof(Control::ErrorHandler::ErrorHandlerConfig)));
 constexpr uint16_t PositionToCurrentPIDParamSize  = alignedSizeOf((uint16_t)(sizeof(Control::PIDParameters_t)));
 constexpr uint16_t PositionToVelocityPIDParamSize = alignedSizeOf((uint16_t)(sizeof(Control::PIDParameters_t)));
@@ -58,8 +59,8 @@ constexpr uint16_t EncoderConfigAddr              = alignUp8(ADCCalibrationDataA
 constexpr uint16_t MotorConfigAddr                = alignUp8(EncoderConfigAddr + EncoderConfigMaxSize);
 constexpr uint16_t encoderCompensationTableAddr   = alignUp8(MotorConfigAddr + MotorConfigMaxSize);
 constexpr uint16_t FOCConfigAddr                  = alignUp8(encoderCompensationTableAddr + encoderCompensationTableSize);
-constexpr uint16_t MotorControlConfigAddr         = alignUp8(FOCConfigAddr + FOCConfigMaxSize);
-constexpr uint16_t ErrorHandlerConfigAddr         = alignUp8(MotorControlConfigAddr + MotorControlConfigMaxSize);
+constexpr uint16_t MotorConfigAddr         = alignUp8(FOCConfigAddr + FOCConfigMaxSize);
+constexpr uint16_t ErrorHandlerConfigAddr         = alignUp8(MotorConfigAddr + MotorConfigMaxSize);
 constexpr uint16_t PositionToCurrentPIDParamAddr  = alignUp8(ErrorHandlerConfigAddr + ErrorHandlerConfigMaxSize);
 constexpr uint16_t PositionToVelocityPIDParamAddr = alignUp8(PositionToCurrentPIDParamAddr + PositionToCurrentPIDParamSize);
 constexpr uint16_t VelocityPIDParamAddr           = alignUp8(PositionToVelocityPIDParamAddr + PositionToVelocityPIDParamSize);
@@ -73,7 +74,7 @@ static_assert((EncoderConfigAddr % FlashAddressAlignment) == 0);
 static_assert((MotorConfigAddr % FlashAddressAlignment) == 0);
 static_assert((encoderCompensationTableAddr % FlashAddressAlignment) == 0);
 static_assert((FOCConfigAddr % FlashAddressAlignment) == 0);
-static_assert((MotorControlConfigAddr % FlashAddressAlignment) == 0);
+static_assert((MotorConfigAddr % FlashAddressAlignment) == 0);
 static_assert((ErrorHandlerConfigAddr % FlashAddressAlignment) == 0);
 static_assert((PositionToCurrentPIDParamAddr % FlashAddressAlignment) == 0);
 static_assert((PositionToVelocityPIDParamAddr % FlashAddressAlignment) == 0);
@@ -84,7 +85,7 @@ static_assert(ADCCalibrationDataMaxSize         >= sizeof(Sensor::ADC::ADCCalibr
 static_assert(EncoderConfigMaxSize              >= sizeof(Sensor::Encoder::EncoderConfig));
 static_assert(MotorConfigMaxSize                >= sizeof(Control::FOC::MotorConfig));
 static_assert(FOCConfigMaxSize                  >= sizeof(Control::FOC::FOCConfig));
-static_assert(MotorControlConfigMaxSize         >= sizeof(Control::MotorControl::MotorControlConfig));
+static_assert(MotorConfigMaxSize         >= sizeof(Control::Motor::MotorConfig));
 static_assert(ErrorHandlerConfigMaxSize         >= sizeof(Control::ErrorHandler::ErrorHandlerConfig));
 static_assert(PositionToCurrentPIDParamSize     >= sizeof(Control::PIDParameters_t));
 static_assert(PositionToVelocityPIDParamSize    >= sizeof(Control::PIDParameters_t));
@@ -253,9 +254,9 @@ void update()
     case ConfigLoaderState::PREPARE_BUFFER:
         {
             // Pack data
-            const Control::PIDParameters_t positionToCurrentPIDParam = Control::MotorControl::positionToCurrentPID.getParameters();
-            const Control::PIDParameters_t positionToVelocityPIDParam = Control::MotorControl::positionToVelocityPID.getParameters();
-            const Control::PIDParameters_t velocityPIDParam = Control::MotorControl::velocityPID.getParameters();
+            const Control::PIDParameters_t positionToCurrentPIDParam = Control::Motor::positionToCurrentPID.getParameters();
+            const Control::PIDParameters_t positionToVelocityPIDParam = Control::Motor::positionToVelocityPID.getParameters();
+            const Control::PIDParameters_t velocityPIDParam = Control::Motor::velocityPID.getParameters();
             const Control::PIDParameters_t iqPIDParam = Control::FOC::IqPID.getParameters();
             const Control::PIDParameters_t idPIDParam = Control::FOC::IdPID.getParameters();
 
@@ -264,7 +265,7 @@ void update()
             packConfigToBuffer(EncoderConfigAddr, &Sensor::Encoder::encoderConfig, sizeof(Sensor::Encoder::EncoderConfig));
             packConfigToBuffer(MotorConfigAddr, &Control::FOC::motorConfig, sizeof(Control::FOC::MotorConfig));
             packConfigToBuffer(FOCConfigAddr, &Control::FOC::focConfig, sizeof(Control::FOC::FOCConfig));
-            packConfigToBuffer(MotorControlConfigAddr, &Control::MotorControl::motorControlConfig, sizeof(Control::MotorControl::MotorControlConfig));
+            packConfigToBuffer(MotorConfigAddr, &Control::Motor::MotorConfig, sizeof(Control::Motor::MotorConfig));
             packConfigToBuffer(ErrorHandlerConfigAddr, &Control::ErrorHandler::errorHandlerConfig, sizeof(Control::ErrorHandler::ErrorHandlerConfig));
             packConfigToBuffer(PositionToCurrentPIDParamAddr, &positionToCurrentPIDParam, sizeof(Control::PIDParameters_t));
             packConfigToBuffer(PositionToVelocityPIDParamAddr, &positionToVelocityPIDParam, sizeof(Control::PIDParameters_t));
@@ -347,14 +348,14 @@ ConfigLoaderError loadAllConfigFromFlash()
     Sensor::Encoder::EncoderConfig encoderConfig;
     Control::FOC::MotorConfig motorConfig;
     Control::FOC::FOCConfig focConfig;
-    Control::MotorControl::MotorControlConfig motorControlConfig;
+    Control::Motor::MotorConfig MotorConfig;
     Control::ErrorHandler::ErrorHandlerConfig errorHandlerConfig;
 
     unpackConfigFromBuffer(ADCCalibrationDataAddr, &adcCalibrationData, sizeof(Sensor::ADC::ADCCalibrationData));
     unpackConfigFromBuffer(EncoderConfigAddr, &encoderConfig, sizeof(Sensor::Encoder::EncoderConfig));
     unpackConfigFromBuffer(MotorConfigAddr, &motorConfig, sizeof(Control::FOC::MotorConfig));
     unpackConfigFromBuffer(FOCConfigAddr, &focConfig, sizeof(Control::FOC::FOCConfig));
-    unpackConfigFromBuffer(MotorControlConfigAddr, &motorControlConfig, sizeof(Control::MotorControl::MotorControlConfig));
+    unpackConfigFromBuffer(MotorConfigAddr, &MotorConfig, sizeof(Control::Motor::MotorConfig));
     unpackConfigFromBuffer(ErrorHandlerConfigAddr, &errorHandlerConfig, sizeof(Control::ErrorHandler::ErrorHandlerConfig));
     Control::PIDParameters_t positionToCurrentPIDParam = {};
     Control::PIDParameters_t positionToVelocityPIDParam = {};
@@ -372,12 +373,12 @@ ConfigLoaderError loadAllConfigFromFlash()
     Sensor::Encoder::setConfig(&encoderConfig);
     Control::FOC::setMotorConfig(&motorConfig);
     Control::FOC::setFOCConfig(&focConfig);
-    Control::MotorControl::setConfig(&motorControlConfig);
+    Control::Motor::setConfig(&MotorConfig);
     Control::ErrorHandler::setConfig(&errorHandlerConfig);
 
-    Control::MotorControl::positionToCurrentPID.setParameters(positionToCurrentPIDParam);
-    Control::MotorControl::positionToVelocityPID.setParameters(positionToVelocityPIDParam);
-    Control::MotorControl::velocityPID.setParameters(velocityPIDParam);
+    Control::Motor::positionToCurrentPID.setParameters(positionToCurrentPIDParam);
+    Control::Motor::positionToVelocityPID.setParameters(positionToVelocityPIDParam);
+    Control::Motor::velocityPID.setParameters(velocityPIDParam);
     Control::FOC::IqPID.setParameters(iqPIDParam);
     Control::FOC::IdPID.setParameters(idPIDParam);
 
@@ -454,7 +455,7 @@ ConfigLoaderError loadFOCConfigFromFlash()
     return ConfigLoaderError::NoError;
 }
 
-ConfigLoaderError loadMotorControlFromFlash()
+ConfigLoaderError loadMotorFromFlash()
 {
     ConfigLoaderError err = loadConfigToBufferFromFlash();
     if(err)
@@ -462,9 +463,9 @@ ConfigLoaderError loadMotorControlFromFlash()
         return err;
     }
 
-    Control::MotorControl::MotorControlConfig motorControlConfig;
-    unpackConfigFromBuffer(MotorControlConfigAddr, &motorControlConfig, sizeof(Control::MotorControl::MotorControlConfig));
-    Control::MotorControl::setConfig(&motorControlConfig);
+    Control::Motor::MotorConfig MotorConfig;
+    unpackConfigFromBuffer(MotorConfigAddr, &MotorConfig, sizeof(Control::Motor::MotorConfig));
+    Control::Motor::setConfig(&MotorConfig);
     
     return ConfigLoaderError::NoError;
 }
@@ -498,15 +499,15 @@ ConfigLoaderError loadPIDConfigFromFlash(PIDType pidType)
     {
     case PIDType::PositionToCurrentPID:
         unpackConfigFromBuffer(PositionToCurrentPIDParamAddr, &pidParam, sizeof(Control::PIDParameters_t));
-        Control::MotorControl::positionToCurrentPID.setParameters(pidParam);
+        Control::Motor::positionToCurrentPID.setParameters(pidParam);
         break;
     case PIDType::PositionToVelocityPID:
         unpackConfigFromBuffer(PositionToVelocityPIDParamAddr, &pidParam, sizeof(Control::PIDParameters_t));
-        Control::MotorControl::positionToVelocityPID.setParameters(pidParam);
+        Control::Motor::positionToVelocityPID.setParameters(pidParam);
         break;
     case PIDType::VelocityPID:
         unpackConfigFromBuffer(VelocityPIDParamAddr, &pidParam, sizeof(Control::PIDParameters_t));
-        Control::MotorControl::velocityPID.setParameters(pidParam);
+        Control::Motor::velocityPID.setParameters(pidParam);
         break;
     case PIDType::IqPID:
         unpackConfigFromBuffer(IqPIDParamAddr, &pidParam, sizeof(Control::PIDParameters_t));
@@ -538,3 +539,5 @@ ConfigLoaderError waitForLastOperation(uint32_t timeout)
 
 } // namespace ConfigLoader
 } // namespace Control
+
+#endif

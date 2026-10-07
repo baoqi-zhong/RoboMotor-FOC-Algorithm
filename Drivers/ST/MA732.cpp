@@ -10,8 +10,14 @@
  * See the LICENSE file in the project root for full license text.
  */
 #include "MA732.hpp"
+
+#if (PLATFORM_ST)
+
 #include "Encoder.hpp"
-#include "ThreePhaseFOC.hpp"
+
+extern "C" SPI_HandleTypeDef hspi1 __attribute__((weak));
+extern "C" SPI_HandleTypeDef hspi2 __attribute__((weak));
+extern "C" SPI_HandleTypeDef hspi3 __attribute__((weak));
 
 namespace Sensor
 {
@@ -24,15 +30,6 @@ SPI_HandleTypeDef *hspi = NULL;
 uint8_t MA732Buffer[8] = {0};
 uint8_t emptyBuffer[8] = {0};
 
-/*
-作用: 返回还原后的 Encoder 偏移值
-*/
-// int16_t getBias(uint16_t rawAngle)
-// {
-//     uint16_t rawAngleLow = rawAngle & 0xFF;
-//     uint16_t rawAngleHigh = rawAngle >> 8;
-//     return ENCODER_BIAS[rawAngleHigh] * 2 + (((ENCODER_BIAS[rawAngleHigh + 1] - ENCODER_BIAS[rawAngleHigh]) * rawAngleLow) >> 7);
-// }
 
 void writeReg(uint8_t addr, uint8_t data)
 {
@@ -94,8 +91,38 @@ void setToZero()
     writeZeroOffset(0xFFFF - currentAngle + offset);
 }
 
+void setZeroHardware()
+{
+    setToZero();
+}
+
+SPI_HandleTypeDef* getSPIHandleFromIndex(uint32_t spiIndex)
+{
+    switch (spiIndex)
+    {
+        case 1:
+            return &hspi1;
+        case 2:
+            return &hspi2;
+        case 3:
+            return &hspi3;
+        default:
+            return nullptr;
+    }
+}
+
+void init(uint32_t spiIndex)
+{
+    init(getSPIHandleFromIndex(spiIndex));
+}
+
 void init(SPI_HandleTypeDef *hspi_)
 {
+    if (hspi_ == nullptr)
+    {
+        return;
+    }
+
     hspi = hspi_;
     HAL_GPIO_WritePin(MA732_CS_GPIO_Port, MA732_CS_Pin, GPIO_PIN_SET);
     __HAL_SPI_ENABLE(hspi);
@@ -114,6 +141,11 @@ void init(SPI_HandleTypeDef *hspi_)
 
 uint16_t readBlocking()
 {
+    if (hspi == nullptr)
+    {
+        return 0;
+    }
+
     // MA732 本身有 9 us 的 Latency, 但是需要加上从读取到 setPhaseVoltage 的时间 19 us
     // encoderDelayTime = 0.000009f + 0.000019;
 
@@ -145,3 +177,5 @@ uint16_t readBlocking()
 } // namespace MA732
 } // namespace Encoder
 } // namespace Sensor
+
+#endif // PLATFORM_ST

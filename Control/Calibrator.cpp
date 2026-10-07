@@ -9,10 +9,11 @@
  * This file is licensed under the MIT License.
  * See the LICENSE file in the project root for full license text.
  */
+#if 0
 #include "Calibrator.hpp"
 
-#include "MotorControl.hpp"
-#include "ThreePhaseFOC.hpp"
+#include "Motor.hpp"
+#include "FOC.hpp"
 #include "Encoder.hpp"
 #include "CordicHelper.hpp"
 #include "M3508_LinerHallEncoder.hpp"
@@ -155,7 +156,7 @@ void openLoopMoveTo(int32_t angle, float voltage)
     Control::FOC::outputUalpha = cordicOutputCosMulUd;
     Control::FOC::outputUbeta  = cordicOutputSinMulUd;
 
-    Control::FOC::setPhraseVoltage(Control::FOC::outputUalpha, Control::FOC::outputUbeta);
+    Control::FOC::setPhaseVoltage(Control::FOC::outputUalpha, Control::FOC::outputUbeta);
 }
 
 void init()
@@ -178,9 +179,9 @@ void update()
         Sensor::Encoder::encoderConfig.enableEncoderCompensation = 1;   // 启用编码器误差补偿
 
         // 进入正常运行模式
-        Control::MotorControl::motorControlStatus.enableCalibration = 0;
-        Control::MotorControl::motorControlStatus.calibrationState = Control::MotorControl::MotorCalibrationState::Stop;
-        Control::MotorControl::motorControlStatus.state = Control::MotorControl::MotorControlState::preRunning;
+        Control::Motor::MotorStatus.enableCalibration = 0;
+        Control::Motor::MotorStatus.calibrationState = Control::Motor::MotorCalibrationState::Stop;
+        Control::Motor::MotorStatus.state = Control::Motor::MotorState::preRunning;
 
         // 保存参数到 Flash
         Control::ConfigLoader::saveAllConfigToFlashAsync();
@@ -204,7 +205,7 @@ void update()
         calibratorStatus.currentVoltage = 0.0f;
         nextCurrentSampleIndex = 0;
         nextEncoderSampleIndex = 0;
-        Control::FOC::setPhraseVoltage(0, 0);
+        Control::FOC::setPhaseVoltage(0, 0);
     }
 
     else if(currentAction.action == CalibrateActionType::MOVE_TO_POSITION)
@@ -239,13 +240,13 @@ void update()
     else if (currentAction.action == CalibrateActionType::START_FOC)
     {
         /* 校准模式下 FOC State Machine 处于 Stop. 用于防止多次 triggerReset */
-        if(Control::MotorControl::motorControlStatus.state == Control::MotorControl::MotorControlState::Stop)
+        if(Control::Motor::MotorStatus.state == Control::Motor::MotorState::Stop)
         {
             // 进入正常运行模式
-            Control::MotorControl::motorControlStatus.state = Control::MotorControl::MotorControlState::preRunning;
+            Control::Motor::MotorStatus.state = Control::Motor::MotorState::preRunning;
 
-            Control::FOC::focConfig.FOCControlMode = Control::FOC::FOCControlMode_t::VOLTAGE_TOURQUE_CONTROL;
-            Control::MotorControl::motorControlStatus.targetIq = 0.4f;
+            Control::FOC::focConfig.torqueControlMode = Control::FOC::FOCControlMode_t::VOLTAGE_TOURQUE_CONTROL;
+            Control::Motor::MotorStatus.targetIq = 0.4f;
         }
     }
     
@@ -436,3 +437,5 @@ void update()
 
 } // namespace Calibrator
 } // namespace Control
+
+#endif

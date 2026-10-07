@@ -24,6 +24,7 @@ class IncrementalPID
 {
 public:
     IncrementalPID();
+    explicit IncrementalPID(const PIDParameters_t& parameters_);
     void setParameters(const PIDParameters_t& parameters_);
     float operator()(float target, float measurement);
     void reset();

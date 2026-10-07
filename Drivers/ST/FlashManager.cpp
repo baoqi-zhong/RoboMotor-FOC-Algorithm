@@ -11,7 +11,9 @@
  */
 #include "FlashManager.hpp"
 
+#if (PLATFORM_ST)
 
+#include "main.h"
 #include "stm32g4xx_hal_flash.h"
 #include "stm32g4xx_hal_flash_ex.h"
 
@@ -27,7 +29,7 @@ namespace FlashManager
 {
 FlashErrorState getPageFromAddr(uint32_t addr, uint8_t* page)
 {
-    if(FLASH_PAGE_1_BASE <= addr && addr < (FLASH_PAGE_1_BASE + (USER_FLASH_SIZE >> 1))) // Bank 1
+    if(FLASH_PAGE_1_BASE <= addr && addr < (FLASH_PAGE_1_BASE + USER_FLASH_SIZE))
     {
         *page = (addr - FLASH_PAGE_1_BASE) / USER_FLASH_PAGE_SIZE; // Calculate page number
     }
@@ -141,14 +143,14 @@ void update(void)
     }
 }
 
-FlashErrorState erasePageAsync(uint8_t page, FlashCallback callback)
+FlashErrorState erasePagesAsync(uint8_t page, uint8_t pageCount, FlashCallback callback)
 {
     if(flashState != FlashState::IDLE)
     {
         return FlashErrorState::FLASH_BUSY;
     }
 
-    if(page >= USER_FLASH_PAGE_NB)
+    if(page >= USER_FLASH_PAGE_NB || pageCount == 0 || (page + pageCount) > USER_FLASH_PAGE_NB)
     {
         return FlashErrorState::FLASH_ERROR; // Invalid page
     }
@@ -158,7 +160,7 @@ FlashErrorState erasePageAsync(uint8_t page, FlashCallback callback)
     pEraseInit.TypeErase    = FLASH_TYPEERASE_PAGES;
     pEraseInit.Banks        = FLASH_BANK_1;
     pEraseInit.Page         = page;
-    pEraseInit.NbPages      = 1;
+    pEraseInit.NbPages      = pageCount;
 
     currentCallback = callback;
     flashState = FlashState::ERASE_BUSY;
@@ -173,6 +175,11 @@ FlashErrorState erasePageAsync(uint8_t page, FlashCallback callback)
         return FlashErrorState::FLASH_ERROR;
     }
     return FlashErrorState::FLASH_SUCCESS;
+}
+
+FlashErrorState erasePageAsync(uint8_t page, FlashCallback callback)
+{
+    return erasePagesAsync(page, 1, callback);
 }
 
 FlashErrorState flashWriteAsync(uint8_t* src, uint32_t dest, uint32_t len, FlashCallback callback)
@@ -233,11 +240,61 @@ FlashErrorState waitForLastOperation(uint32_t timeout)
 }
 
 }  // namespace FlashManager
+
+void InternalFlashManager::init(void)
+{
+    FlashManager::init();
+}
+
+void InternalFlashManager::update(void)
+{
+    FlashManager::update();
+}
+
+InternalFlashManager::ErrorState InternalFlashManager::read(uint32_t src, uint8_t* dest, uint32_t len)
+{
+    return FlashManager::flashRead(src, dest, len);
+}
+
+InternalFlashManager::ErrorState InternalFlashManager::eraseAsync(uint32_t startAddress, uint32_t size, AsyncCallback callback)
+{
+    if (size == 0 || startAddress > (0xFFFFFFFFU - size + 1U))
+    {
+        return ErrorState::FLASH_ERROR;
+    }
+
+    uint8_t startPage = 0;
+    uint8_t endPage = 0;
+    ErrorState state = FlashManager::getPageFromAddr(startAddress, &startPage);
+    if (state != ErrorState::FLASH_SUCCESS)
+    {
+        return state;
+    }
+
+    state = FlashManager::getPageFromAddr(startAddress + size - 1U, &endPage);
+    if (state != ErrorState::FLASH_SUCCESS)
+    {
+        return state;
+    }
+
+    return FlashManager::erasePagesAsync(startPage, endPage - startPage + 1U, callback);
+}
+
+InternalFlashManager::ErrorState InternalFlashManager::writeAsync(uint8_t* src, uint32_t dest, uint32_t len, AsyncCallback callback)
+{
+    return FlashManager::flashWriteAsync(src, dest, len, callback);
+}
+
+InternalFlashManager::ErrorState InternalFlashManager::waitForLastOperation(uint32_t timeout)
+{
+    return FlashManager::waitForLastOperation(timeout);
+}
 }  // namespace Drivers
 
 // Implement these callbacks for Flash Interrupts
 extern "C" void HAL_FLASH_EndOfOperationCallback(uint32_t ReturnValue)
 {
+    (void)ReturnValue;
     using namespace Drivers::FlashManager;
 
     // Hardware operation finished
@@ -255,8 +312,11 @@ extern "C" void HAL_FLASH_EndOfOperationCallback(uint32_t ReturnValue)
 
 extern "C" void HAL_FLASH_OperationErrorCallback(uint32_t ReturnValue)
 {
+    (void)ReturnValue;
     using namespace Drivers::FlashManager;
     
     HAL_FLASH_Lock();
     flashState = FlashState::ERROR;
 }
+
+#endif // PLATFORM_ST

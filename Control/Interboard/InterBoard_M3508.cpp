@@ -11,23 +11,24 @@
  */
 #include "InterBoard.hpp"
 
+#if 0
 #include "ErrorHandler.hpp"
-#include "MotorControl.hpp"
+#include "Motor.hpp"
 #include "Encoder.hpp"
-#include "FDCANManager.hpp"
+#include "CANManager.hpp"
 #include "Math.hpp"
 
 namespace Control
 {
 namespace InterBoard
 {
-void decode(uint32_t CANId, uint8_t* rxBuffer)
+void decode(uint32_t CANId, const uint8_t* rxBuffer)
 {
     if(CANId != 0x200)
         return;
 
-    int16_t receiveIq = (int16_t)(rxBuffer[(Control::MotorControl::motorControlConfig.boardID - 1) * 2] << 8 | rxBuffer[(Control::MotorControl::motorControlConfig.boardID - 1) * 2 + 1]);
-    Control::MotorControl::motorControlStatus.targetIq = receiveIq * 20.0f / 16384.0f;
+    int16_t receiveIq = (int16_t)(rxBuffer[(Control::Motor::MotorConfig.boardID - 1) * 2] << 8 | rxBuffer[(Control::Motor::MotorConfig.boardID - 1) * 2 + 1]);
+    Control::Motor::MotorStatus.targetIq = receiveIq * 20.0f / 16384.0f;
 
     interBoardStatus.disconnectCounter = 0;
     interBoardStatus.connectionStatus = 1;
@@ -48,11 +49,7 @@ void transmitFeedback()
     transmitIq         = (int32_t)(interBoardStatus.accumulatedIq * 16384.0f / 20.0f) / (int32_t)interBoardStatus.accumulatedIqCounter;
 
     // 单位: 度
-    #if USE_NTC
     uint16_t transmitTemperature = Sensor::ADC::analogValues.NTCTemperature;
-    #else
-    uint16_t transmitTemperature = 0;
-    #endif
     InterBoardTxBuffer[0] = transmitEncoder >> 8;
     InterBoardTxBuffer[1] = transmitEncoder & 0xFF;
     InterBoardTxBuffer[2] = transmitRotorSpeed >> 8;
@@ -68,8 +65,10 @@ void transmitFeedback()
     interBoardStatus.accumulatedRotorSpeedCounter   = 0;
     interBoardStatus.accumulatedIq                  = 0;
     interBoardStatus.accumulatedIqCounter           = 0;
-    Drivers::FDCANManager::transmit(0x200 + Control::MotorControl::motorControlConfig.boardID, InterBoardTxBuffer);
+    Drivers::CANManager::transmit(0x200 + Control::Motor::MotorConfig.boardID, InterBoardTxBuffer);
 }
 
 } // namespace InterBoard
 } // namespace Control
+
+#endif
