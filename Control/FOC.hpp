@@ -77,7 +77,7 @@ public:
      */
     void currentLoopUpdate();
 
-    bool enableFOCOutput            = true;     /* 是否使能 FOC 输出，失能时仍会计算相关参数 */
+    bool enableFOCOutput    = false;    /* 是否使能 FOC 输出，失能时仍会计算相关参数 */
     FOCInput focInput;
     FOCOutput focOutput;
 
@@ -136,15 +136,13 @@ void FOC<focConfigStatic>::setPhaseVoltage(float Ualpha, float Ubeta)
     float X = 0, Y = 0;
 
     float scaleSquare = Ualpha * Ualpha + Ubeta * Ubeta;
-    if(scaleSquare > 1)
+    if(scaleSquare > 1.0f)
     {
         float scaleRatio = fastInvSquareRoot(scaleSquare);
         Ualpha *= scaleRatio;
         Ubeta  *= scaleRatio;
     }
-    // TODO? alpha beta 闄愬箙
 
-    // 鍏竟褰㈠唴鎺ュ渾, 淇濊瘉 X + Y <= 1
     Ualpha *= SQRT3_OVER_2;
     Ubeta *= SQRT3_OVER_2;
     
@@ -152,7 +150,6 @@ void FOC<focConfigStatic>::setPhaseVoltage(float Ualpha, float Ubeta)
     float ALPHA_PLUS_BETA_MUL_1_OVER_SQRT3 =        Ualpha + Ubeta * ONE_OVER_SQRT3;
     float MINUS_ALPHA_PLUS_BETA_MUL_1_OVER_SQRT3 =- Ualpha + Ubeta * ONE_OVER_SQRT3;
     
-    // 椤哄簭: 123456
     if(Ubeta >= 0.0f)
     {
         // 1, 2, 3 璞￠檺

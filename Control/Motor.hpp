@@ -29,6 +29,7 @@ namespace Control::Motor
 struct MotorConfigStatic
 {
     Sensor::EncoderConfigStatic encoderConfigStatic;
+    Sensor::EncoderConfig encoderConfig;
     FOC::FOCConfigStatic focConfigStatic;
 
     Sensor::ADC::ADCCalibrationData adcCalibrationData;
@@ -37,6 +38,14 @@ struct MotorConfigStatic
     PIDParameters_t positionToCurrentPIDParameters;
     PIDParameters_t positionToVelocityPIDParameters;
     PIDParameters_t velocityPIDParameters;
+
+    bool enableSpeedCloseLoop       = false;
+    bool enablePositionCloseLoop    = false;
+
+    float defaultIqLimit            = 1.0f;
+    float defaultVelocityLimit      = 0.0f;
+    float openLoopRotateSpeed       = 0.0f;
+    float openLoopDragVoltage       = 0.0f;
 };
 
 template<MotorConfigStatic motorConfigStatic, typename MotorHAL>
@@ -73,7 +82,8 @@ public:
 
     MotorHAL motorHAL;
     FOC::FOC<motorConfigStatic.focConfigStatic> foc;
-    Sensor::Encoder<motorConfigStatic.encoderConfigStatic> encoder;
+    Sensor::Encoder<motorConfigStatic.encoderConfigStatic> encoder  
+                                                    {motorConfigStatic.encoderConfig};
     Sensor::ADC::ADC adc                            {motorConfigStatic.adcCalibrationData};
     ErrorHandler::ErrorHandler errorHandler         {motorConfigStatic.errorHandlerConfig};
 
@@ -84,21 +94,19 @@ public:
     MotorState state                                = MotorState::Stop;
     MotorCalibrationState calibrationState          = MotorCalibrationState::Stop;
 
-    uint8_t enableFOCOutput                         = 0;
+    bool enableSpeedCloseLoop                       = motorConfigStatic.enableSpeedCloseLoop;
+    bool enablePositionCloseLoop                    = motorConfigStatic.enablePositionCloseLoop;
+    float defaultIqLimit                            = motorConfigStatic.defaultIqLimit;
+    float defaultVelocityLimit                      = motorConfigStatic.defaultVelocityLimit;
+    float openLoopRotateSpeed                       = motorConfigStatic.openLoopRotateSpeed;
+    float openLoopDragVoltage                       = motorConfigStatic.openLoopDragVoltage;
+
     uint8_t triggerReset                            = 0;
 
     float targetIq                                  = 0.0f;
     float targetId                                  = 0.0f;
     float targetVelocity                            = 0.0f;
     float targetPosition                            = 0.0f;
-
-    bool enableSpeedCloseLoop                       = true;
-    bool enablePositionCloseLoop                    = true;
-
-    float defaultIqLimit                            = 20.0f;
-    float defaultVelocityLimit                      = 0.0f;
-    float openLoopRotateSpeed                       = 0.0f;
-    float openLoopDragVoltage                       = 0.0f;
 };
 
 template<MotorConfigStatic motorConfigStatic, typename MotorHAL>
@@ -245,7 +253,7 @@ void Motor<motorConfigStatic, MotorHAL>::run1KhzLoop()
 
         motorHAL.enableTimerPWMHighSideOutput();
 
-        // foc.enableFOCOutput = true;
+        foc.enableFOCOutput = true;
         state = MotorState::Running;
     }
 
@@ -265,6 +273,10 @@ void Motor<motorConfigStatic, MotorHAL>::run4KhzLoop()
     {
         velocityPID.setOutputLimit(FABS(defaultIqLimit));
         targetIq = velocityPID(targetVelocity, encoder.RAD_shaftAngularVelocity);
+    }
+    else
+    {
+        targetIq = defaultIqLimit;
     }
 }
 

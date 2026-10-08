@@ -31,7 +31,7 @@ struct EncoderConfig
     uint8_t direction               = 1;
     int8_t compensationTable[64]    = {0};
     float compensationGain          = 1.0f;
-    uint8_t enableCompensation      = 1;
+    uint8_t enableCompensation      = 0;
     float delayTime                 = 0.0f;
     float LPFAlpha                  = 0.01f;
 };
