@@ -1,4 +1,4 @@
-/**
+﻿/**
  * @file Motor.hpp
  * @brief Motor control state machine and configuration.
  * @author baoqi-zhong (zzhongas@connect.ust.hk)
@@ -14,7 +14,7 @@
 #include "stdint.h"
 
 #include "ADC.hpp"
-#include "CordicHelper.hpp"
+#include "Trigonometric.hpp"
 #include "Encoder.hpp"
 #include "ErrorHandler.hpp"
 #include "FOC.hpp"
@@ -30,6 +30,9 @@ struct MotorConfigStatic
 {
     Sensor::EncoderConfigStatic encoderConfigStatic;
     FOC::FOCConfigStatic focConfigStatic;
+
+    Sensor::ADC::ADCCalibrationData adcCalibrationData;
+    ErrorHandler::ErrorHandlerConfig errorHandlerConfig;
 
     PIDParameters_t positionToCurrentPIDParameters;
     PIDParameters_t positionToVelocityPIDParameters;
@@ -70,38 +73,38 @@ public:
 
     MotorHAL motorHAL;
     FOC::FOC<motorConfigStatic.focConfigStatic> foc;
-    Sensor::ADC adc;
     Sensor::Encoder<motorConfigStatic.encoderConfigStatic> encoder;
-    ErrorHandler::ErrorHandler errorHandler;
+    Sensor::ADC::ADC adc                            {motorConfigStatic.adcCalibrationData};
+    ErrorHandler::ErrorHandler errorHandler         {motorConfigStatic.errorHandlerConfig};
 
     Control::PositionalPID positionToCurrentPID     {motorConfigStatic.positionToCurrentPIDParameters};
     Control::PositionalPID positionToVelocityPID    {motorConfigStatic.positionToVelocityPIDParameters};
     Control::PositionalPID velocityPID              {motorConfigStatic.velocityPIDParameters};
 
-    MotorState state     = MotorState::Stop;
-    MotorCalibrationState calibrationState = MotorCalibrationState::Stop;
+    MotorState state                                = MotorState::Stop;
+    MotorCalibrationState calibrationState          = MotorCalibrationState::Stop;
 
-    uint8_t enableFOCOutput     = 0;
-    uint8_t triggerReset        = 0;
+    uint8_t enableFOCOutput                         = 0;
+    uint8_t triggerReset                            = 0;
 
-    float targetIq              = 0.0f;
-    float targetId              = 0.0f;
-    float targetVelocity        = 0.0f;
-    float targetPosition        = 0.0f;
+    float targetIq                                  = 0.0f;
+    float targetId                                  = 0.0f;
+    float targetVelocity                            = 0.0f;
+    float targetPosition                            = 0.0f;
 
-    bool enableSpeedCloseLoop       = true;
-    bool enablePositionCloseLoop    = true;
+    bool enableSpeedCloseLoop                       = true;
+    bool enablePositionCloseLoop                    = true;
 
-    float defaultIqLimit            = 20.0f;
-    float defaultVelocityLimit      = 0.0f;
-    float openLoopRotateSpeed       = 0.0f;
-    float openLoopDragVoltage       = 0.0f;
+    float defaultIqLimit                            = 20.0f;
+    float defaultVelocityLimit                      = 0.0f;
+    float openLoopRotateSpeed                       = 0.0f;
+    float openLoopDragVoltage                       = 0.0f;
 };
 
 template<MotorConfigStatic motorConfigStatic, typename MotorHAL>
 void Motor<motorConfigStatic, MotorHAL>::init()
 {
-    Utils::CordicHelper::initCordic16();
+    Utils::Trigonometric::init();
     // Control::Calibrator::init();
     // Control::InterBoard::init();
 
@@ -120,7 +123,7 @@ template<MotorConfigStatic motorConfigStatic, typename MotorHAL>
 void Motor<motorConfigStatic, MotorHAL>::disableMotor()
 {
     motorHAL.disableTimerPWMOutput();
-    foc.enableFOCOutput = 0;
+    foc.enableFOCOutput = false;
     state = MotorState::Stop;
 }
 
@@ -242,7 +245,7 @@ void Motor<motorConfigStatic, MotorHAL>::run1KhzLoop()
 
         motorHAL.enableTimerPWMHighSideOutput();
 
-        foc.enableFOCOutput = 1;
+        // foc.enableFOCOutput = true;
         state = MotorState::Running;
     }
 
@@ -287,3 +290,4 @@ void Motor<motorConfigStatic, MotorHAL>::runCurrentLoop()
 }
 
 } // namespace Control::Motor
+

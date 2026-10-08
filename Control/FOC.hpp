@@ -1,4 +1,4 @@
-/**
+﻿/**
  * @file FOC.hpp
  * @brief FOC algorithm configuration, constants and interface.
  * @author baoqi-zhong (zzhongas@connect.ust.hk)
@@ -13,7 +13,7 @@
 
 #include "main.h"
 
-#include "CordicHelper.hpp"
+#include "Trigonometric.hpp"
 #include "IncrementalPID.hpp"
 #include "LPF.hpp"
 #include "Math.hpp"
@@ -31,12 +31,12 @@ enum class TorqueControlMode : uint8_t
 
 struct FOCConfigStatic
 {
-    float currentLoopFreq;                  /* 电流环频�? Hz */
-    TorqueControlMode torqueControlMode;    /* 电流环控制模�?*/
-    float CurrentCordicBase;                /* 电流环计算时的基准电�? A */
+    float currentLoopFreq;                  /* 电流环频率, Hz */
+    TorqueControlMode torqueControlMode;    /* 电流环控制模式 */
+    float CurrentCordicBase;                /* 电流环计算时的基准电流, A */
 
-    float phaseResistance;                  /* 相电�? Ω */
-    float phaseInductance;                  /* 相电�? H */
+    float phaseResistance;                  /* 相电阻, Ohm */
+    float phaseInductance;                  /* 相电感, H */
     float kv;                               /* 电机速度常数, RPM/V */
 
     PIDParameters_t IqPIDParameters;        /* q 轴电流环 PID 参数 */
@@ -47,36 +47,37 @@ template<FOCConfigStatic focConfigStatic>
 class FOC
 {
 public:
-    /* 高频跑电流环的时候的输入 */
+    /* 高频跑电流环时的输入 */
     struct FOCInput
     {
-        float measuredIA    = 0.0f;     /* 测量�?A 相电�? A */
-        float measuredIB    = 0.0f;     /* 测量�?B 相电�? A */
-        float measuredIC    = 0.0f;     /* 测量�?C 相电�? A */
+        float measuredIA    = 0.0f;     /* 测量的 A 相电流, A */
+        float measuredIB    = 0.0f;     /* 测量的 B 相电流, A */
+        float measuredIC    = 0.0f;     /* 测量的 C 相电流, A */
         float measuredVbus  = 0.0f;     /* 测量的总线电压, V */
 
-        float targetIq      = 0.0f;     /* 目标�?q 轴电�? A */
-        float targetId      = 0.0f;     /* 目标�?d 轴电�? A */
+        float targetIq      = 0.0f;     /* 目标的 q 轴电流, A */
+        float targetId      = 0.0f;     /* 目标的 d 轴电流, A */
 
-        uint16_t Q16_electricAngle          = 0;        /* 测量角度转换为电角度, Q16 定点�?*/
+        uint16_t Q16_electricAngle          = 0;        /* 测量角度转换为电角度, Q16 定点数 */
         float RAD_electricAngularVelocity   = 0.0f;     /* 测量的电机角速度, RAD/S */
         float RAD_shaftAngularVelocity      = 0.0f;     /* 测量的输出轴角速度, RAD/S */
     };
 
     struct FOCOutput
     {
-        float dutyA         = 0.0f;     /* 输出�?A 相占空比, 0~1 */
-        float dutyB         = 0.0f;     /* 输出�?B 相占空比, 0~1 */
-        float dutyC         = 0.0f;     /* 输出�?C 相占空比, 0~1 */
+        float dutyA         = 0.0f;     /* 输出的 A 相占空比, 0~1 */
+        float dutyB         = 0.0f;     /* 输出的 B 相占空比, 0~1 */
+        float dutyC         = 0.0f;     /* 输出的 C 相占空比, 0~1 */
     };
 
     void setPhaseVoltage(float Ualpha, float Ubeta);
 
     /**
-     * @brief 电流环更�? 调用前需要外部掏 focInput, 运行之后会更�?focOutput, 外部直接掏出�?     */
+     * @brief 电流环更新调用前需要外部填充 focInput，运行后会更新 focOutput
+     */
     void currentLoopUpdate();
 
-    bool enableFOCOutput            = true;     /* 是否使能 FOC 输出, 失能的时候仍会计算相关参�?*/
+    bool enableFOCOutput            = true;     /* 是否使能 FOC 输出，失能时仍会计算相关参数 */
     FOCInput focInput;
     FOCOutput focOutput;
 
@@ -89,7 +90,7 @@ private:
     float measuredIq                = 0.0f;
     float measuredId                = 0.0f;
 
-    /* 前馈�?*/
+    /* 前馈项 */
     float backwardEMF = 0;
     float outputUqFeedForward       = 0.0f;
     float outputUdFeedForward       = 0.0f;
@@ -106,6 +107,11 @@ private:
     float outputUbeta               = 0.0f;
     int16_t outputAngle             = 0;
 };
+
+inline float q16ToRadians(uint16_t q16Angle)
+{
+    return static_cast<float>(q16Angle) * TWO_PI / 65536.0f;
+}
 
 inline float fastInvSquareRoot(float number)
 {
@@ -136,9 +142,9 @@ void FOC<focConfigStatic>::setPhaseVoltage(float Ualpha, float Ubeta)
         Ualpha *= scaleRatio;
         Ubeta  *= scaleRatio;
     }
-    // TODO? alpha beta 限幅
+    // TODO? alpha beta 闄愬箙
 
-    // 六边形内接圆, 保证 X + Y <= 1
+    // 鍏竟褰㈠唴鎺ュ渾, 淇濊瘉 X + Y <= 1
     Ualpha *= SQRT3_OVER_2;
     Ubeta *= SQRT3_OVER_2;
     
@@ -146,10 +152,10 @@ void FOC<focConfigStatic>::setPhaseVoltage(float Ualpha, float Ubeta)
     float ALPHA_PLUS_BETA_MUL_1_OVER_SQRT3 =        Ualpha + Ubeta * ONE_OVER_SQRT3;
     float MINUS_ALPHA_PLUS_BETA_MUL_1_OVER_SQRT3 =- Ualpha + Ubeta * ONE_OVER_SQRT3;
     
-    // 顺序: 123456
+    // 椤哄簭: 123456
     if(Ubeta >= 0.0f)
     {
-        // 1, 2, 3 象限
+        // 1, 2, 3 璞￠檺
         if(Ubeta * ONE_OVER_SQRT3 < Ualpha)
             sector = 1;
         else if (-Ubeta * ONE_OVER_SQRT3 < Ualpha)
@@ -159,7 +165,7 @@ void FOC<focConfigStatic>::setPhaseVoltage(float Ualpha, float Ubeta)
     }
     else
     {
-        // 4, 5, 6 象限
+        // 4, 5, 6 璞￠檺
         if(Ubeta * ONE_OVER_SQRT3 > Ualpha)
             sector = 4;
         else if (-Ubeta * ONE_OVER_SQRT3 > Ualpha)
@@ -221,28 +227,29 @@ void FOC<focConfigStatic>::currentLoopUpdate()
     // Clarke 变换
     // measuredIalpha = measuredIA - 0.5f * measuredIB - 0.5f * measuredIphaseC;
     // measuredIbeta = SQRT3_OVER_2 * (measuredIB - measuredIphaseC);
-    // 等幅值形�?    measuredIalpha = focInput.measuredIA;
+    // 等幅值形式
+    measuredIalpha = focInput.measuredIA;
     measuredIbeta = ONE_OVER_SQRT3 * (focInput.measuredIA + 2.0f * focInput.measuredIB);
 
     // Park 变换
     // measuredId = measuredIalpha * cosf(realAngle) + measuredIbeta * sinf(realAngle);
     // measuredIq = measuredIalpha * sinf(realAngle) - measuredIbeta * cosf(realAngle);
+    float electricAngle = q16ToRadians(focInput.Q16_electricAngle);
     float cordicOutputSinMulIalpha;
     float cordicOutputCosMulIalpha;
-    hcordic.Instance->WDATA = (Utils::CordicHelper::singleFloatToCordic15(measuredIalpha / focConfigStatic.CurrentCordicBase) << 16) | (focInput.Q16_electricAngle & 0xFFFF);
-    Utils::CordicHelper::cordic15ToDualFloat((int32_t)(hcordic.Instance->RDATA), &cordicOutputSinMulIalpha, &cordicOutputCosMulIalpha);
+    Utils::Trigonometric::sinCosMultiply(measuredIalpha / focConfigStatic.CurrentCordicBase, electricAngle, &cordicOutputSinMulIalpha, &cordicOutputCosMulIalpha);
 
     float cordicOutputSinMulIbeta;
     float cordicOutputCosMulIbeta;
-    hcordic.Instance->WDATA = (Utils::CordicHelper::singleFloatToCordic15(measuredIbeta / focConfigStatic.CurrentCordicBase) << 16) | (focInput.Q16_electricAngle & 0xFFFF);
-    Utils::CordicHelper::cordic15ToDualFloat((int32_t)(hcordic.Instance->RDATA), &cordicOutputSinMulIbeta, &cordicOutputCosMulIbeta);
+    Utils::Trigonometric::sinCosMultiply(measuredIbeta / focConfigStatic.CurrentCordicBase, electricAngle, &cordicOutputSinMulIbeta, &cordicOutputCosMulIbeta);
 
     measuredId = (cordicOutputCosMulIalpha + cordicOutputSinMulIbeta) * focConfigStatic.CurrentCordicBase;
     measuredIq = (-cordicOutputSinMulIalpha + cordicOutputCosMulIbeta) * focConfigStatic.CurrentCordicBase;
 
-    if(enableFOCOutput == 0)
+    if(!enableFOCOutput)
     {
-        // 有待斟酌 到底�?set �?0 的电压还是切换到高阻�?        // setPhaseVoltage(0, 0);
+        // 有待斟酌：到底是 set 为 0 电压还是切换到高阻态
+        // setPhaseVoltage(0, 0);
         return;
     }
 
@@ -278,7 +285,7 @@ void FOC<focConfigStatic>::currentLoopUpdate()
         outputUqWithFeedForward = outputUq + outputUqFeedForward;
         outputUdWithFeedForward = outputUd + outputUdFeedForward;
 
-        // // 挤压限幅
+        // // 鎸ゅ帇闄愬箙
         // if(outputUqWithFeedForward > outputLimitVoltage)
         // {
         //     IqPID.setOutput(outputUq - (outputUqWithFeedForward - outputLimitVoltage));
@@ -305,7 +312,7 @@ void FOC<focConfigStatic>::currentLoopUpdate()
 
     else if(focConfigStatic.torqueControlMode == TorqueControlMode::VOLTAGE_TOURQUE_CONTROL)
     {
-        // 不使用电流采�? 直接使用前馈电压控制
+        // 不使用电流采样，直接使用前馈电压控制
 
         // 反电动势前馈
         backwardEMF = focInput.RAD_shaftAngularVelocity * RAD_PER_S_TO_RPM_RATIO / focConfigStatic.kv;
@@ -331,22 +338,21 @@ void FOC<focConfigStatic>::currentLoopUpdate()
     outputUqWithFeedForward = CLAMP(outputUqWithFeedForward, -outputLimitVoltage, outputLimitVoltage);
     outputUdWithFeedForward = CLAMP(outputUdWithFeedForward, -outputLimitVoltage, outputLimitVoltage);
 
-    // Circular Limitation. 防止 Uq Ud 过大, 超出 PWM 可以提供的电�?
-    // 电角度补�? 因为会先写入 shadow register, PWM 结果真正生效是在 1.5 周期之后. 所以此处需要补�?1.5 周期
+    // Circular Limitation. 防止 Uq Ud 过大，超出 PWM 可以提供的电压
+    // 电角度补偿：因为会先写入 shadow register，PWM 结果真正生效是在 1.5 周期之后，所以此处需要补偿 1.5 周期
     // outputAngle += (int16_t)(focInput.Q16_deltaElectricAngleLPF * 1.5f);
 
     // Inverse Park Transform
     // outputUalpha = outputUd * cosf(outputAngle) - outputUq * sinf(outputAngle);
     // outputUbeta = outputUd * sinf(outputAngle) + outputUq * cosf(outputAngle);
+    float outputAngleRadians = q16ToRadians(outputAngle);
     static float cordicOutputSinMulUq;
     static float cordicOutputCosMulUq;
-    hcordic.Instance->WDATA = (Utils::CordicHelper::singleFloatToCordic15(outputUqWithFeedForward / focInput.measuredVbus) << 16) | (outputAngle & 0xFFFF);
-    Utils::CordicHelper::cordic15ToDualFloat((int32_t)(hcordic.Instance->RDATA), &cordicOutputSinMulUq, &cordicOutputCosMulUq);
+    Utils::Trigonometric::sinCosMultiply(outputUqWithFeedForward / focInput.measuredVbus, outputAngleRadians, &cordicOutputSinMulUq, &cordicOutputCosMulUq);
 
     static float cordicOutputSinMulUd;
     static float cordicOutputCosMulUd;
-    hcordic.Instance->WDATA = (Utils::CordicHelper::singleFloatToCordic15(outputUdWithFeedForward / focInput.measuredVbus) << 16) | (outputAngle & 0xFFFF);
-    Utils::CordicHelper::cordic15ToDualFloat((int32_t)(hcordic.Instance->RDATA), &cordicOutputSinMulUd, &cordicOutputCosMulUd);
+    Utils::Trigonometric::sinCosMultiply(outputUdWithFeedForward / focInput.measuredVbus, outputAngleRadians, &cordicOutputSinMulUd, &cordicOutputCosMulUd);
 
     outputUalpha = (cordicOutputCosMulUd - cordicOutputSinMulUq);
     outputUbeta = (cordicOutputSinMulUd + cordicOutputCosMulUq);
@@ -354,3 +360,5 @@ void FOC<focConfigStatic>::currentLoopUpdate()
     setPhaseVoltage(outputUalpha, outputUbeta);
 }
 } // namespace Control::FOC
+
+

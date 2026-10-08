@@ -15,8 +15,8 @@
 #include "Motor.hpp"
 #include "FOC.hpp"
 #include "Encoder.hpp"
-#include "CordicHelper.hpp"
-#include "M3508_LinerHallEncoder.hpp"
+#include "Trigonometric.hpp"
+#include "SinCosEncoder.hpp"
 #include "ADC.hpp"
 #include "Math.hpp"
 #include "ConfigLoader.hpp"
@@ -150,8 +150,7 @@ void openLoopMoveTo(int32_t angle, float voltage)
 
     static float cordicOutputSinMulUd;
     static float cordicOutputCosMulUd;
-    hcordic.Instance->WDATA = (Utils::CordicHelper::singleFloatToCordic15(voltage / 24.0f) << 16) | (angle & 0xFFFF);
-    Utils::CordicHelper::cordic15ToDualFloat((int32_t)(hcordic.Instance->RDATA), &cordicOutputSinMulUd, &cordicOutputCosMulUd);
+    Utils::Trigonometric::sinCosMultiply(voltage / 24.0f, static_cast<float>(angle) * TWO_PI / 65536.0f, &cordicOutputSinMulUd, &cordicOutputCosMulUd);
     
     Control::FOC::outputUalpha = cordicOutputCosMulUd;
     Control::FOC::outputUbeta  = cordicOutputSinMulUd;

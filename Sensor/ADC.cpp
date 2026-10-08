@@ -25,23 +25,42 @@
  * 由 Injected Conversion 的中断回调函数触发 Regular Conversion.
  */
 
-namespace Sensor
+namespace Sensor::ADC
 {
+void ADC::updatePhaseCurrent(uint16_t rawIA, uint16_t rawIB, uint16_t rawIC)
+{
+    analogValues.rawIA = rawIA;
+    analogValues.rawIB = rawIB;
+    analogValues.rawIC = rawIC;
+    analogValues.measuredIA = (float)((int16_t)rawIA - adcCalibrationData.IAOffset) * adcCalibrationData.IAGain;
+    analogValues.measuredIB = (float)((int16_t)rawIB - adcCalibrationData.IBOffset) * adcCalibrationData.IBGain;
+    analogValues.measuredIC = (float)((int16_t)rawIC - adcCalibrationData.ICOffset) * adcCalibrationData.ICGain;
+}
+
+void ADC::updatePhaseVoltage(uint16_t rawVA, uint16_t rawVB, uint16_t rawVC)
+{
+    analogValues.measuredVA = (float)rawVA * adcCalibrationData.VAGain;
+    analogValues.measuredVB = (float)rawVB * adcCalibrationData.VBGain;
+    analogValues.measuredVC = (float)rawVC * adcCalibrationData.VCGain;
+}
+
+void ADC::updateVbus(uint16_t rawVbus)
+{
+    analogValues.Vbus = (float)rawVbus * adcCalibrationData.VbusGain;
+}
 
 void ADC::resetADCCalibrationData()
 {
     IAStatisticsCalculator.reset();
     IBStatisticsCalculator.reset();
     ICStatisticsCalculator.reset();
-    VbusStatisticsCalculator.reset();
 }
 
 void ADC::addADCCalibrationData()
 {
-    IAStatisticsCalculator.addData(analogValues.measuredIA);
-    IBStatisticsCalculator.addData(analogValues.measuredIB);
-    ICStatisticsCalculator.addData(analogValues.measuredIC);
-    VbusStatisticsCalculator.addData(analogValues.Vbus);
+    IAStatisticsCalculator.addData(analogValues.rawIA);
+    IBStatisticsCalculator.addData(analogValues.rawIB);
+    ICStatisticsCalculator.addData(analogValues.rawIC);
 }
 
 // 返回 1 代表校准成功, 0 代表校准失败. 校准成功的条件是 ADC 数据的标准差小于某个阈值, 且平均值在某个范围内.
@@ -51,24 +70,25 @@ uint8_t ADC::checkADCCalibrationSuccess()
     float averageVariance = (
         IAStatisticsCalculator.getVariance() + 
         IBStatisticsCalculator.getVariance() + 
-        ICStatisticsCalculator.getVariance() + 
-        VbusStatisticsCalculator.getVariance()
+        ICStatisticsCalculator.getVariance()
     ) / 4.0f;
 
-    if(averageVariance > 0.5f)
+    if(averageVariance > 5.0f)
         return 0;
 
     if(
-        FABS(IAStatisticsCalculator.getMean()) > 0.1f ||
-        FABS(IBStatisticsCalculator.getMean()) > 0.1f ||
-        FABS(ICStatisticsCalculator.getMean()) > 0.1f ||
-        VbusStatisticsCalculator.getMean() < 10.0f
+        FABS(IAStatisticsCalculator.getMean() - adcCalibrationData.IAOffset) > (adcCalibrationData.IAOffset >> 4) ||
+        FABS(IBStatisticsCalculator.getMean() - adcCalibrationData.IBOffset) > (adcCalibrationData.IBOffset >> 4) ||
+        FABS(ICStatisticsCalculator.getMean() - adcCalibrationData.ICOffset) > (adcCalibrationData.ICOffset >> 4)
     )
     {
         return 0;
     }
 
+    adcCalibrationData.IAOffset = (uint16_t)IAStatisticsCalculator.getMean();
+    adcCalibrationData.IBOffset = (uint16_t)IBStatisticsCalculator.getMean();
+    adcCalibrationData.ICOffset = (uint16_t)ICStatisticsCalculator.getMean();
     return 1;
 }
 
-} // namespace Sensor
+} // namespace Sensor::ADC
