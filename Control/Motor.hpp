@@ -24,21 +24,8 @@
 
 namespace Control::Motor
 {
-
-/* 仅在初始化时用于修改 Status */
-struct MotorConfigStatic
+struct MotorConfig
 {
-    Sensor::EncoderConfigStatic encoderConfigStatic;
-    Sensor::EncoderConfig encoderConfig;
-    FOC::FOCConfigStatic focConfigStatic;
-
-    Sensor::ADC::ADCCalibrationData adcCalibrationData;
-    ErrorHandler::ErrorHandlerConfig errorHandlerConfig;
-
-    PIDParameters_t positionToCurrentPIDParameters;
-    PIDParameters_t positionToVelocityPIDParameters;
-    PIDParameters_t velocityPIDParameters;
-
     bool enableSpeedCloseLoop       = false;
     bool enablePositionCloseLoop    = false;
 
@@ -48,7 +35,24 @@ struct MotorConfigStatic
     float openLoopDragVoltage       = 0.0f;
 };
 
-template<MotorConfigStatic motorConfigStatic, typename MotorHAL>
+struct GenericConfigStatic
+{
+    /* Static Config: Used for Template instantiation */
+    Sensor::EncoderConfigStatic encoderConfigStatic;
+    FOC::FOCConfigStatic focConfigStatic;
+
+    /* Dynamic Config: Used at runtime */
+    Sensor::EncoderConfig encoderConfig;
+    Sensor::ADC::ADCCalibrationData adcCalibrationData;
+    ErrorHandler::ErrorHandlerConfig errorHandlerConfig;
+    MotorConfig motorConfig;
+
+    PIDParameters_t positionToCurrentPIDParameters;
+    PIDParameters_t positionToVelocityPIDParameters;
+    PIDParameters_t velocityPIDParameters;
+};
+
+template<GenericConfigStatic genericConfigStatic, typename MotorHAL>
 class Motor
 {
 public:
@@ -81,25 +85,25 @@ public:
     void disableMotor();
 
     MotorHAL motorHAL;
-    FOC::FOC<motorConfigStatic.focConfigStatic> foc;
-    Sensor::Encoder<motorConfigStatic.encoderConfigStatic> encoder  
-                                                    {motorConfigStatic.encoderConfig};
-    Sensor::ADC::ADC adc                            {motorConfigStatic.adcCalibrationData};
-    ErrorHandler::ErrorHandler errorHandler         {motorConfigStatic.errorHandlerConfig};
+    FOC::FOC<genericConfigStatic.focConfigStatic> foc;
+    Sensor::Encoder<genericConfigStatic.encoderConfigStatic> encoder  
+                                                    {genericConfigStatic.encoderConfig};
+    Sensor::ADC::ADC adc                            {genericConfigStatic.adcCalibrationData};
+    ErrorHandler::ErrorHandler errorHandler         {genericConfigStatic.errorHandlerConfig};
 
-    Control::PositionalPID positionToCurrentPID     {motorConfigStatic.positionToCurrentPIDParameters};
-    Control::PositionalPID positionToVelocityPID    {motorConfigStatic.positionToVelocityPIDParameters};
-    Control::PositionalPID velocityPID              {motorConfigStatic.velocityPIDParameters};
+    Control::PositionalPID positionToCurrentPID     {genericConfigStatic.positionToCurrentPIDParameters};
+    Control::PositionalPID positionToVelocityPID    {genericConfigStatic.positionToVelocityPIDParameters};
+    Control::PositionalPID velocityPID              {genericConfigStatic.velocityPIDParameters};
 
     MotorState state                                = MotorState::Stop;
     MotorCalibrationState calibrationState          = MotorCalibrationState::Stop;
 
-    bool enableSpeedCloseLoop                       = motorConfigStatic.enableSpeedCloseLoop;
-    bool enablePositionCloseLoop                    = motorConfigStatic.enablePositionCloseLoop;
-    float defaultIqLimit                            = motorConfigStatic.defaultIqLimit;
-    float defaultVelocityLimit                      = motorConfigStatic.defaultVelocityLimit;
-    float openLoopRotateSpeed                       = motorConfigStatic.openLoopRotateSpeed;
-    float openLoopDragVoltage                       = motorConfigStatic.openLoopDragVoltage;
+    bool enableSpeedCloseLoop                       = genericConfigStatic.motorConfig.enableSpeedCloseLoop;
+    bool enablePositionCloseLoop                    = genericConfigStatic.motorConfig.enablePositionCloseLoop;
+    float defaultIqLimit                            = genericConfigStatic.motorConfig.defaultIqLimit;
+    float defaultVelocityLimit                      = genericConfigStatic.motorConfig.defaultVelocityLimit;
+    float openLoopRotateSpeed                       = genericConfigStatic.motorConfig.openLoopRotateSpeed;
+    float openLoopDragVoltage                       = genericConfigStatic.motorConfig.openLoopDragVoltage;
 
     uint8_t triggerReset                            = 0;
 
@@ -109,8 +113,8 @@ public:
     float targetPosition                            = 0.0f;
 };
 
-template<MotorConfigStatic motorConfigStatic, typename MotorHAL>
-void Motor<motorConfigStatic, MotorHAL>::init()
+template<GenericConfigStatic genericConfigStatic, typename MotorHAL>
+void Motor<genericConfigStatic, MotorHAL>::init()
 {
     Utils::Trigonometric::init();
     // Control::Calibrator::init();
@@ -121,22 +125,22 @@ void Motor<motorConfigStatic, MotorHAL>::init()
     motorHAL.startTimerBase();
 }
 
-template<MotorConfigStatic motorConfigStatic, typename MotorHAL>
-void Motor<motorConfigStatic, MotorHAL>::updateEncoder(uint16_t Q16_encoder_)
+template<GenericConfigStatic genericConfigStatic, typename MotorHAL>
+void Motor<genericConfigStatic, MotorHAL>::updateEncoder(uint16_t Q16_encoder_)
 {
     encoder.update(Q16_encoder_);
 }
 
-template<MotorConfigStatic motorConfigStatic, typename MotorHAL>
-void Motor<motorConfigStatic, MotorHAL>::disableMotor()
+template<GenericConfigStatic genericConfigStatic, typename MotorHAL>
+void Motor<genericConfigStatic, MotorHAL>::disableMotor()
 {
     motorHAL.disableTimerPWMOutput();
     foc.enableFOCOutput = false;
     state = MotorState::Stop;
 }
 
-template<MotorConfigStatic motorConfigStatic, typename MotorHAL>
-void Motor<motorConfigStatic, MotorHAL>::run1KhzLoop()
+template<GenericConfigStatic genericConfigStatic, typename MotorHAL>
+void Motor<genericConfigStatic, MotorHAL>::run1KhzLoop()
 {
     if(errorHandler.checkError1KHz(adc.analogValues))
         disableMotor();
@@ -263,8 +267,8 @@ void Motor<motorConfigStatic, MotorHAL>::run1KhzLoop()
     }
 }
 
-template<MotorConfigStatic motorConfigStatic, typename MotorHAL>
-void Motor<motorConfigStatic, MotorHAL>::run4KhzLoop()
+template<GenericConfigStatic genericConfigStatic, typename MotorHAL>
+void Motor<genericConfigStatic, MotorHAL>::run4KhzLoop()
 {
     if(state != MotorState::Running)
         return;
@@ -280,8 +284,8 @@ void Motor<motorConfigStatic, MotorHAL>::run4KhzLoop()
     }
 }
 
-template<MotorConfigStatic motorConfigStatic, typename MotorHAL>
-void Motor<motorConfigStatic, MotorHAL>::runCurrentLoop()
+template<GenericConfigStatic genericConfigStatic, typename MotorHAL>
+void Motor<genericConfigStatic, MotorHAL>::runCurrentLoop()
 {
     if(errorHandler.checkErrorHighFreq(adc.analogValues))
         disableMotor();
