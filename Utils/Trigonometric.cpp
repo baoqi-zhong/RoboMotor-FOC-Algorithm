@@ -68,6 +68,9 @@ void cordic15ToDualFloat(int32_t cordic15, float* lowValue, float* highValue)
 
 void setFunction(uint32_t function)
 {
+    static uint32_t currentFunction = 0xFFFFFFFF;
+    if(currentFunction == function)
+        return;
     MODIFY_REG(hcordic.Instance->CSR, CORDIC_CSR_FUNC, function);
 }
 } // namespace
@@ -85,6 +88,8 @@ void init()
     cordicConfig.NbRead = CORDIC_NBREAD_1;
     cordicConfig.Precision = CORDIC_PRECISION_8CYCLES;
     HAL_CORDIC_Configure(&hcordic, &cordicConfig);
+
+    setFunction(CORDIC_FUNCTION_SINE);
 #endif
 }
 
@@ -111,7 +116,6 @@ uint16_t phaseQ16(float y, float x)
     setFunction(CORDIC_FUNCTION_PHASE);
     hcordic.Instance->WDATA = dualFloatToCordic15(y, x);
     uint16_t angle = static_cast<uint16_t>(hcordic.Instance->RDATA);
-    setFunction(CORDIC_FUNCTION_SINE);
     return angle;
 #elif TRIGONOMETRIC_BACKEND == TRIGONOMETRIC_BACKEND_LIBM
     float angle = atan2f(y, x);
