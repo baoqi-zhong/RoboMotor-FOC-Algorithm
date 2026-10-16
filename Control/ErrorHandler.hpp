@@ -11,9 +11,7 @@
  */
 #pragma once
 
-#include "main.h"
 #include "stdint.h"
-
 #include "ADC.hpp"
 
 namespace Control::ErrorHandler

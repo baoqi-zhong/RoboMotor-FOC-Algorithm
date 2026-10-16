@@ -11,11 +11,7 @@
  */
 #pragma once
 
-
-#include "main.h"
-#include "adc.h"
 #include "stdint.h"
-
 #include "statisticsCalculator.hpp"
 
 namespace Sensor::ADC

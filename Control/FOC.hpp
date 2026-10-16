@@ -11,8 +11,6 @@
  */
 #pragma once
 
-#include "main.h"
-
 #include "Trigonometric.hpp"
 #include "IncrementalPID.hpp"
 #include "LPF.hpp"

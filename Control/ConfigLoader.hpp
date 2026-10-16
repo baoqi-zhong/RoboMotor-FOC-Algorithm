@@ -12,7 +12,6 @@
 #pragma once
 
 #if 0
-#include "main.h"
 #include "stdint.h"
 
 #include "ADC.hpp"

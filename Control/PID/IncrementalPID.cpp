@@ -26,9 +26,9 @@ IncrementalPID::IncrementalPID(const PIDParameters_t& parameters_)
 
 void IncrementalPID::setParameters(const PIDParameters_t& parameters_)
 {
-    assert_param(parameters_.outputLimit >= 0.0f);
-    assert_param(parameters_.updateFrequency > 0.0f);
-    assert_param(parameters_.alpha >= 0.0f && parameters_.alpha <= 1.0f);
+    parameters_.outputLimit >= 0.0f;
+    parameters_.updateFrequency > 0.0f;
+    parameters_.alpha >= 0.0f && parameters_.alpha <= 1.0f;
 
     this->parameters = parameters_;
     this->reset();

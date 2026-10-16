@@ -10,7 +10,6 @@
  * See the LICENSE file in the project root for full license text.
  */
 #include "ADC.hpp"
-#include "Boards.hpp"
 #include "statisticsCalculator.hpp"
 #include "Math.hpp"
 

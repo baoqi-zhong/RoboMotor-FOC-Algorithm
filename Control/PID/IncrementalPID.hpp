@@ -11,9 +11,6 @@
  */
 #pragma once
 
-#include "main.h"
-
-
 #include "stdint.h"
 #include "PositionalPID.hpp"
 

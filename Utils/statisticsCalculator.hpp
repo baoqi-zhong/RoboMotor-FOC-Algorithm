@@ -12,8 +12,6 @@
 
 #pragma once
 
-#include "main.h"
-
 #include "stdint.h"
 
 namespace Utils

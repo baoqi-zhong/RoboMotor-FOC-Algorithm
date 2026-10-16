@@ -11,8 +11,6 @@
  */
 #pragma once
 #if 0
-
-#include "main.h"
 #include "stdint.h"
 
 namespace Control
