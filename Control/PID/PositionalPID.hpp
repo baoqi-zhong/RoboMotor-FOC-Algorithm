@@ -42,6 +42,8 @@ private:
     PIDParameters_t parameters;
 
     uint8_t firstUpdate     = 1;
+    float target            = 0.0f;
+    float measurement       = 0.0f;
     float lastTarget        = 0.0f;
     float lastMeasurement   = 0.0f;
     float pOut              = 0.0f;

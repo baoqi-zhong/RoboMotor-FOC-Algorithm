@@ -35,8 +35,12 @@ void PositionalPID::setParameters(const PIDParameters_t& parameters_)
 }
 
 
-float PositionalPID::operator()(float target, float measurement)
+
+float PositionalPID::operator()(float target_, float measurement_)
 {
+    target = target_;
+    measurement = measurement_;
+
     if(this->firstUpdate)
     {
         this->lastTarget         = target;

@@ -23,7 +23,7 @@ public:
     IncrementalPID();
     explicit IncrementalPID(const PIDParameters_t& parameters_);
     void setParameters(const PIDParameters_t& parameters_);
-    float operator()(float target, float measurement);
+    float operator()(float target_, float measurement_);
     void reset();
     PIDParameters_t getParameters() const;
     void setOutput(float output_);
@@ -32,6 +32,8 @@ private:
     PIDParameters_t parameters;
 
     uint8_t firstUpdate         = 1;
+    float target            = 0.0f;
+    float measurement       = 0.0f;
     float lastError             = 0.0f;
     float lastMeasurement       = 0.0f;
     float lastLastMeasurement   = 0.0f;

@@ -34,8 +34,11 @@ void IncrementalPID::setParameters(const PIDParameters_t& parameters_)
     this->reset();
 }
 
-float IncrementalPID::operator()(float target, float measurement)
+float IncrementalPID::operator()(float target_, float measurement_)
 {
+    target = target_;
+    measurement = measurement_;
+
     if(this->firstUpdate)
     {
         this->lastLastMeasurement = measurement;
