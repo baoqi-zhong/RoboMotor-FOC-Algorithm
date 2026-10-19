@@ -47,7 +47,7 @@ public:
         GPIO::write(handle.chipSelect, true);
     }
 
-    static bool transferSelected(const Handle& handle, const uint8_t* txBuffer, uint32_t txLength, uint8_t* rxBuffer, uint32_t rxLength, uint32_t timeout)
+    static bool transferNoCs(const Handle& handle, const uint8_t* txBuffer, uint32_t txLength, uint8_t* rxBuffer, uint32_t rxLength, uint32_t timeout)
     {
         if (handle.hspi == nullptr)
         {
@@ -116,6 +116,41 @@ public:
         }
 
         return true;
+    }
+
+    static bool transferWordNoCs(const Handle& handle, uint16_t txData, uint16_t& rxData, uint32_t timeout)
+    {
+        if (handle.hspi == nullptr)
+        {
+            return false;
+        }
+
+        if (handle.hspi->Init.DataSize == SPI_DATASIZE_16BIT)
+        {
+            return HAL_SPI_TransmitReceive(handle.hspi,
+                                           reinterpret_cast<const uint8_t*>(&txData),
+                                           reinterpret_cast<uint8_t*>(&rxData),
+                                           1,
+                                           timeout) == HAL_OK;
+        }
+
+        if (handle.hspi->Init.DataSize == SPI_DATASIZE_8BIT)
+        {
+            const uint8_t txBytes[2] {
+                static_cast<uint8_t>(txData >> 8),
+                static_cast<uint8_t>(txData & 0xFF)
+            };
+            uint8_t rxBytes[2] {};
+            if (HAL_SPI_TransmitReceive(handle.hspi, txBytes, rxBytes, 2, timeout) != HAL_OK)
+            {
+                return false;
+            }
+            rxData = static_cast<uint16_t>(static_cast<uint16_t>(rxBytes[0]) << 8 |
+                                           static_cast<uint16_t>(rxBytes[1]));
+            return true;
+        }
+
+        return false;
     }
 };
     

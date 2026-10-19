@@ -21,53 +21,31 @@ class SPIBus
 public:
     using Handle = typename Platform::Handle;
 
-    class Transaction
+    static bool select(const Handle& handle)
     {
-    public:
-        explicit Transaction(const Handle& handle_) : handle(handle_), selected(Platform::select(handle_)) {}
+        return Platform::select(handle);
+    }
 
-        ~Transaction()
-        {
-            if (selected)
-            {
-                Platform::deselect(handle);
-            }
-        }
-
-        Transaction(const Transaction&) = delete;
-        Transaction& operator=(const Transaction&) = delete;
-
-        explicit operator bool() const
-        {
-            return selected;
-        }
-
-    private:
-        Handle handle;
-        bool selected;
-    };
-
-    /**
-     * @brief Perform one SPI transaction while the platform adapter controls CS.
-     *
-     * Buffer lengths are expressed in bytes. A zero TX length selects a
-     * receive-only transfer, and a zero RX length selects a transmit-only
-     * transfer.
-     */
-    static bool transfer(const Handle& handle, const uint8_t* txBuffer, uint32_t txLength, uint8_t* rxBuffer, uint32_t rxLength, uint32_t timeout = 100)
+    static void deselect(const Handle& handle)
     {
-        Transaction transaction(handle);
-        if (!transaction)
-        {
-            return false;
-        }
-        return transferSelected(handle, txBuffer, txLength, rxBuffer, rxLength, timeout);
+        Platform::deselect(handle);
     }
 
     /**
-     * @brief Transfer data while the caller owns the chip-select transaction.
+     * @brief Perform one SPI transfer.
+     *
+     * Buffer lengths are expressed in bytes. A zero TX length selects a
+     * receive-only transfer, and a zero RX length selects a transmit-only
+     * transfer. When cs is true, CS is selected before the transfer and
+     * deselected afterwards. When cs is false, the caller owns CS.
      */
-    static bool transferSelected(const Handle& handle, const uint8_t* txBuffer, uint32_t txLength, uint8_t* rxBuffer, uint32_t rxLength, uint32_t timeout = 100)
+    static bool transfer(const Handle& handle,
+                         const uint8_t* txBuffer,
+                         uint32_t txLength,
+                         uint8_t* rxBuffer,
+                         uint32_t rxLength,
+                         uint32_t timeout = 100,
+                         bool cs = true)
     {
         if (txLength == 0 && rxLength == 0)
         {
@@ -77,7 +55,60 @@ public:
         {
             return false;
         }
-        return Platform::transferSelected(handle, txBuffer, txLength, rxBuffer, rxLength, timeout);
+
+        if (cs && !select(handle))
+        {
+            return false;
+        }
+
+        const bool success = Platform::transferUnselected(handle, txBuffer, txLength, rxBuffer, rxLength, timeout);
+        
+        if (cs)
+        {
+            deselect(handle);
+        }
+        return success;
+    }
+
+    /**
+     * @brief Transfer one 16-bit SPI frame.
+     */
+    static bool transferWord(const Handle& handle,
+                             uint16_t txData,
+                             uint16_t& rxData,
+                             uint32_t timeout = 100,
+                             bool cs = true)
+    {
+        if (cs && !select(handle))
+        {
+            return false;
+        }
+
+        const bool success = Platform::transferWordNoCs(handle, txData, rxData, timeout);
+        if (cs)
+        {
+            deselect(handle);
+        }
+        return success;
+    }
+
+private:
+    static bool transferUnselected(const Handle& handle,
+                                   const uint8_t* txBuffer,
+                                   uint32_t txLength,
+                                   uint8_t* rxBuffer,
+                                   uint32_t rxLength,
+                                   uint32_t timeout)
+    {
+        if (txLength == 0 && rxLength == 0)
+        {
+            return false;
+        }
+        if ((txLength != 0 && txBuffer == nullptr) || (rxLength != 0 && rxBuffer == nullptr))
+        {
+            return false;
+        }
+        return Platform::transferNoCs(handle, txBuffer, txLength, rxBuffer, rxLength, timeout);
     }
 };
     

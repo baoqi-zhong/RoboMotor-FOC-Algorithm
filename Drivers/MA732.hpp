@@ -18,7 +18,7 @@
 #include <stdint.h>
 #include "main.h"
 
-namespace Sensor::Encoder
+namespace Drivers
 {
 
 template <typename SPIBus>
@@ -50,6 +50,18 @@ public:
         return true;
     }
 
+    bool readBlocking(uint16_t& value) const
+    {
+        uint16_t rxFrame = 0;
+        if (!SPIBus::transferWord(handle, 0, rxFrame, TRANSFER_TIMEOUT_MS))
+        {
+            return false;
+        }
+
+        value = rxFrame;
+        return true;
+    }
+
     bool readRegister(uint8_t address, uint8_t& value) const
     {
         if (address > MAX_REGISTER_ADDRESS)
@@ -57,20 +69,21 @@ public:
             return false;
         }
 
-        typename SPIBus::Transaction transaction(handle);
-        if (!transaction)
+        if (!SPIBus::select(handle))
         {
             return false;
         }
 
         uint16_t rxFrame = 0;
-        if (!transferFrameSelected(makeCommand(READ_CMD, address), rxFrame))
+        bool success = transferFrame(makeCommand(READ_CMD, address), rxFrame, false);
+        if (success)
         {
-            return false;
+            HAL_Delay(REGISTER_READ_GAP_MS);
+            success = transferFrame(0, rxFrame, false);
         }
+        SPIBus::deselect(handle);
 
-        HAL_Delay(REGISTER_READ_GAP_MS);
-        if (!transferFrameSelected(0, rxFrame))
+        if (!success)
         {
             return false;
         }
@@ -92,29 +105,14 @@ private:
                static_cast<uint16_t>(data);
     }
 
-    bool transferFrame(uint16_t txFrame, uint16_t& rxFrame) const
+    bool transferFrame(uint16_t txFrame, uint16_t& rxFrame, bool cs = true) const
     {
-        return SPIBus::transfer(handle,
-                                reinterpret_cast<const uint8_t*>(&txFrame),
-                                sizeof(txFrame),
-                                reinterpret_cast<uint8_t*>(&rxFrame),
-                                sizeof(rxFrame),
-                                TRANSFER_TIMEOUT_MS);
-    }
-
-    bool transferFrameSelected(uint16_t txFrame, uint16_t& rxFrame) const
-    {
-        return SPIBus::transferSelected(handle,
-                                        reinterpret_cast<const uint8_t*>(&txFrame),
-                                        sizeof(txFrame),
-                                        reinterpret_cast<uint8_t*>(&rxFrame),
-                                        sizeof(rxFrame),
-                                        TRANSFER_TIMEOUT_MS);
+        return SPIBus::transferWord(handle, txFrame, rxFrame, TRANSFER_TIMEOUT_MS, cs);
     }
 
     SPIHandle handle;
 };
 
-} // namespace Sensor::Encoder
+} // namespace Drivers
 
 #endif // HARDWARE_PLATFORM == HARDWARE_PLATFORM_STM32
