@@ -1,6 +1,6 @@
 /**
- * @file ThreePhaseTimer.hpp
- * @brief Hardware abstraction layer for timers used for three-phase PWM generation.
+ * @file MotorHardware.hpp
+ * @brief Hardware abstraction layer for the motor power stage and fault signals.
  * @author baoqi-zhong (zzhongas@connect.ust.hk)
  *
  * Part of RoboMotor-FOC-Algorithm.
@@ -15,7 +15,7 @@
 namespace HAL
 {
 
-class ThreePhaseTimer
+class MotorHardware
 {
 public:
     virtual inline void startTimerBase() = 0;
@@ -23,6 +23,18 @@ public:
     virtual inline void enableTimerPWMHighSideOutput() = 0;
     virtual inline void disableTimerPWMOutput() = 0;
     virtual inline void setPWMDutyCycle(float dutyCycleA, float dutyCycleB, float dutyCycleC) = 0;
+
+    /**
+     * @brief Read the platform-specific 1 kHz error source.
+     * @return true when an error is active or its state cannot be read.
+     */
+    virtual bool readError() = 0;
+
+    /**
+     * @brief Attempt to clear the platform-specific latched error.
+     * @return true when the clear operation completed successfully.
+     */
+    virtual bool clearError() = 0;
 };
     
 } // namespace HAL

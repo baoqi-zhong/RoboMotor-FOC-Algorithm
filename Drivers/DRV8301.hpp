@@ -271,13 +271,21 @@ public:
         return true;
     }
 
-    bool enable()
+    bool enable(bool waitUntilReady = true)
     {
+        if (enabled)
+        {
+            return true;
+        }
+
         if (!GPIO::write(pins.enableGate, true))
         {
             return false;
         }
-        Delay::milliseconds(10);
+        if (waitUntilReady)
+        {
+            Delay::milliseconds(10);
+        }
         enabled = true;
         return true;
     }
@@ -455,7 +463,6 @@ public:
         {
             return false;
         }
-        Delay::milliseconds(1);
 
         return readControlRegister1(control) && !control.resetGate;
     }

@@ -13,6 +13,7 @@
 
 #include "stdint.h"
 #include "ADC.hpp"
+#include "MotorHardware.hpp"
 
 namespace Control::ErrorHandler
 {
@@ -48,8 +49,7 @@ public:
         uint8_t underTemperature        = 0;
         uint8_t overTemperature         = 0;
 
-        uint8_t encoderError            = 0;
-        uint8_t motorDisconnected       = 0;
+        uint8_t userFault      = 0;
     };
 
     struct ErrorCounter
@@ -78,7 +78,8 @@ public:
      * @brief Called at 1KHz to check voltage, current-sensor and temperature errors.
      * @return 1 if caller should disable the motor.
      */
-    uint8_t checkError1KHz(const Sensor::ADC::AnalogValues& analogValues);
+    uint8_t checkError1KHz(const Sensor::ADC::AnalogValues& analogValues,
+                           HAL::MotorHardware& motorHardware);
 
     /**
      * @brief Called synchronously with the current loop to check over-current.

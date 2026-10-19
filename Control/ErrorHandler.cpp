@@ -40,8 +40,7 @@ uint8_t ErrorHandler::checkIfAnyErrorStatus()
         errorStatus.ADCDecoderError    ||
         errorStatus.underTemperature   ||
         errorStatus.overTemperature    || 
-        errorStatus.encoderError       ||
-        errorStatus.motorDisconnected;
+        errorStatus.userFault;
 }
 
 
@@ -82,7 +81,8 @@ uint8_t ErrorHandler::checkIfStillInError(const Sensor::ADC::AnalogValues& analo
 
 
 // 以 1KHz 频率调用
-uint8_t ErrorHandler::checkError1KHz(const Sensor::ADC::AnalogValues& analogValues)
+uint8_t ErrorHandler::checkError1KHz(const Sensor::ADC::AnalogValues& analogValues,
+                                     HAL::MotorHardware& motorHardware)
 {
     uint8_t shouldDisableMotor = 0;
 
@@ -153,6 +153,14 @@ uint8_t ErrorHandler::checkError1KHz(const Sensor::ADC::AnalogValues& analogValu
         errorStatus.overTemperature = 1;
     }
 
+    // Platform-specific error source checked once per 1 kHz control tick.
+    if(motorHardware.readError())
+    {
+        shouldDisableMotor = 1;
+        errorStatus.userFault = 1;
+        motorHardware.clearError();
+    }
+
     return shouldDisableMotor;
 }
 
@@ -215,8 +223,7 @@ void ErrorHandler::clearAllError()
     errorStatus.ADCDecoderError    = 0;
     errorStatus.overTemperature    = 0;
     errorStatus.underTemperature   = 0;
-    errorStatus.encoderError       = 0;
-    errorStatus.motorDisconnected  = 0;
+    errorStatus.userFault = 0;
 }
 
 } // namespace Control::ErrorHandler
