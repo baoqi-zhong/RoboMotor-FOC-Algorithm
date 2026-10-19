@@ -1,6 +1,6 @@
 /**
- * @file AS5407P.hpp
- * @brief Generic AS5407P / AS5047P-compatible rotary encoder driver.
+ * @file AS5047P.hpp
+ * @brief Generic AS5047P rotary encoder driver.
  * @author baoqi-zhong (zzhongas@connect.ust.hk)
  *
  * Part of RoboMotor-FOC-Algorithm.
@@ -16,7 +16,7 @@
 namespace Drivers
 {
 
-enum class AS5407PRegister : uint16_t
+enum class AS5047PRegister : uint16_t
 {
     Nop = 0x0000,
     ErrorFlags = 0x0001,
@@ -31,7 +31,7 @@ enum class AS5407PRegister : uint16_t
     Settings2 = 0x0019
 };
 
-struct AS5407PErrorFlags
+struct AS5047PErrorFlags
 {
     bool framingError = false;
     bool invalidCommand = false;
@@ -39,7 +39,7 @@ struct AS5407PErrorFlags
     uint16_t raw = 0;
 };
 
-struct AS5407PDiagnostics
+struct AS5047PDiagnostics
 {
     uint8_t agc = 0;
     bool offsetCompensationFinished = false;
@@ -49,7 +49,7 @@ struct AS5407PDiagnostics
     uint16_t raw = 0;
 };
 
-struct AS5407PSettings1
+struct AS5047PSettings1
 {
     bool factorySetting = true;
     bool noiseSetting = false;
@@ -73,7 +73,7 @@ struct AS5407PSettings1
             (pwmEnabled ? 0x80 : 0x00));
     }
 
-    static constexpr AS5407PSettings1 decode(uint16_t value)
+    static constexpr AS5047PSettings1 decode(uint16_t value)
     {
         return {
             (value & 0x01) != 0,
@@ -88,7 +88,7 @@ struct AS5407PSettings1
     }
 };
 
-struct AS5407PSettings2
+struct AS5047PSettings2
 {
     uint8_t uvwPolePairsMinusOne = 0;
     uint8_t hysteresis = 0;
@@ -102,7 +102,7 @@ struct AS5407PSettings2
             ((abiResolution & 0x07) << 5));
     }
 
-    static constexpr AS5407PSettings2 decode(uint16_t value)
+    static constexpr AS5047PSettings2 decode(uint16_t value)
     {
         return {
             static_cast<uint8_t>(value & 0x07),
@@ -113,19 +113,19 @@ struct AS5407PSettings2
 };
 
 /**
- * @brief AS5407P driver using a 16-bit SPI HAL.
+ * @brief AS5047P driver using a 16-bit SPI HAL.
  *
  * SPI must use mode 1 (CPOL = 0, CPHA = 1), MSB first, and at most 10 MHz.
  */
 template <typename SPIBus, typename Delay>
-class AS5407P
+class AS5047P
 {
 public:
     using SPIHandle = typename SPIBus::Handle;
 
-    explicit AS5407P(const SPIHandle& spiHandle_) : spiHandle(spiHandle_) {}
+    explicit AS5047P(const SPIHandle& spiHandle_) : spiHandle(spiHandle_) {}
 
-    bool readRegister(AS5407PRegister address, uint16_t& value, bool rejectErrorFlag = true) const
+    bool readRegister(AS5047PRegister address, uint16_t& value, bool rejectErrorFlag = true) const
     {
         const uint16_t command = buildCommand(address, true);
         uint16_t ignored = 0;
@@ -137,7 +137,7 @@ public:
         Delay::microseconds(INTER_FRAME_DELAY_US);
 
         uint16_t response = 0;
-        if (!transferFrame(buildCommand(AS5407PRegister::Nop, true), response))
+        if (!transferFrame(buildCommand(AS5047PRegister::Nop, true), response))
         {
             return false;
         }
@@ -155,7 +155,7 @@ public:
         return true;
     }
 
-    bool writeRegister(AS5407PRegister address, uint16_t value) const
+    bool writeRegister(AS5047PRegister address, uint16_t value) const
     {
         uint16_t ignored = 0;
         if (!transferFrame(buildCommand(address, false), ignored))
@@ -170,9 +170,9 @@ public:
     bool readAngleRaw(uint16_t& angle, bool withDaec = true) const
     {
         uint16_t value = 0;
-        const AS5407PRegister address = withDaec
-            ? AS5407PRegister::AngleCompensated
-            : AS5407PRegister::AngleUncompensated;
+        const AS5047PRegister address = withDaec
+            ? AS5047PRegister::AngleCompensated
+            : AS5047PRegister::AngleUncompensated;
         if (!readRegister(address, value))
         {
             return false;
@@ -210,13 +210,13 @@ public:
 
     bool readMagnitude(uint16_t& magnitude) const
     {
-        return readRegister(AS5407PRegister::Magnitude, magnitude);
+        return readRegister(AS5047PRegister::Magnitude, magnitude);
     }
 
-    bool readErrorFlags(AS5407PErrorFlags& status) const
+    bool readErrorFlags(AS5047PErrorFlags& status) const
     {
         uint16_t value = 0;
-        if (!readRegister(AS5407PRegister::ErrorFlags, value, false))
+        if (!readRegister(AS5047PRegister::ErrorFlags, value, false))
         {
             return false;
         }
@@ -228,10 +228,10 @@ public:
         return true;
     }
 
-    bool readDiagnostics(AS5407PDiagnostics& diagnostics) const
+    bool readDiagnostics(AS5047PDiagnostics& diagnostics) const
     {
         uint16_t value = 0;
-        if (!readRegister(AS5407PRegister::Diagnostics, value))
+        if (!readRegister(AS5047PRegister::Diagnostics, value))
         {
             return false;
         }
@@ -245,37 +245,37 @@ public:
         return true;
     }
 
-    bool readSettings(AS5407PSettings1& settings1, AS5407PSettings2& settings2) const
+    bool readSettings(AS5047PSettings1& settings1, AS5047PSettings2& settings2) const
     {
         uint16_t value = 0;
-        if (!readRegister(AS5407PRegister::Settings1, value))
+        if (!readRegister(AS5047PRegister::Settings1, value))
         {
             return false;
         }
-        settings1 = AS5407PSettings1::decode(value);
+        settings1 = AS5047PSettings1::decode(value);
 
-        if (!readRegister(AS5407PRegister::Settings2, value))
+        if (!readRegister(AS5047PRegister::Settings2, value))
         {
             return false;
         }
-        settings2 = AS5407PSettings2::decode(value);
+        settings2 = AS5047PSettings2::decode(value);
         return true;
     }
 
-    bool writeSettings(const AS5407PSettings1& settings1, const AS5407PSettings2& settings2) const
+    bool writeSettings(const AS5047PSettings1& settings1, const AS5047PSettings2& settings2) const
     {
-        AS5407PSettings1 writableSettings1 = settings1;
+        AS5047PSettings1 writableSettings1 = settings1;
         writableSettings1.factorySetting = true;
         writableSettings1.noiseSetting = false;
-        return writeRegister(AS5407PRegister::Settings1, writableSettings1.encode()) &&
-               writeRegister(AS5407PRegister::Settings2, settings2.encode());
+        return writeRegister(AS5047PRegister::Settings1, writableSettings1.encode()) &&
+               writeRegister(AS5047PRegister::Settings2, settings2.encode());
     }
 
     bool setZeroPosition(uint16_t zeroPosition) const
     {
-        return writeRegister(AS5407PRegister::ZeroPositionMsb,
+        return writeRegister(AS5047PRegister::ZeroPositionMsb,
                              static_cast<uint16_t>((zeroPosition >> 6) & 0xFF)) &&
-               writeRegister(AS5407PRegister::ZeroPositionLsb,
+               writeRegister(AS5047PRegister::ZeroPositionLsb,
                              static_cast<uint16_t>(zeroPosition & 0x3F)) &&
                sendNop();
     }
@@ -296,7 +296,7 @@ private:
     static constexpr uint32_t TRANSFER_TIMEOUT_MS = 100;
     static constexpr uint32_t INTER_FRAME_DELAY_US = 1;
 
-    static constexpr uint16_t buildCommand(AS5407PRegister address, bool read)
+    static constexpr uint16_t buildCommand(AS5047PRegister address, bool read)
     {
         return withEvenParity(static_cast<uint16_t>(
             (static_cast<uint16_t>(address) & 0x3FFF) |
@@ -325,13 +325,10 @@ private:
     bool sendNop() const
     {
         uint16_t ignored = 0;
-        return transferFrame(buildCommand(AS5407PRegister::Nop, true), ignored);
+        return transferFrame(buildCommand(AS5047PRegister::Nop, true), ignored);
     }
 
     SPIHandle spiHandle;
 };
-
-template <typename SPIBus, typename Delay>
-using AS5047P = AS5407P<SPIBus, Delay>;
 
 } // namespace Drivers
