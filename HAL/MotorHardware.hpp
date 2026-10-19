@@ -18,7 +18,8 @@ namespace HAL
 class MotorHardware
 {
 public:
-    virtual inline void startTimerBase() = 0;
+    virtual inline void enableGateDriver() = 0;
+    virtual bool isGateDriverEnabled() = 0;
     virtual inline void enableTimerPWMLowSideOutput() = 0;
     virtual inline void enableTimerPWMHighSideOutput() = 0;
     virtual inline void disableTimerPWMOutput() = 0;

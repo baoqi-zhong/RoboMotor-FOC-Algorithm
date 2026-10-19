@@ -72,7 +72,8 @@ public:
     /**
      * @brief Check whether the measured values are still in an error state.
      */
-    uint8_t checkIfStillInError(const Sensor::ADC::AnalogValues& analogValues);
+    uint8_t checkIfStillInError(const Sensor::ADC::AnalogValues& analogValues,
+                                HAL::MotorHardware& motorHardware);
 
     /**
      * @brief Called at 1KHz to check voltage, current-sensor and temperature errors.
@@ -91,7 +92,10 @@ public:
      * @brief Called at 1KHz to check whether auto recovery can request reset.
      * @return 1 if caller should set triggerReset.
      */
-    uint8_t checkIfCanAutoRecovery(const Sensor::ADC::AnalogValues& analogValues, uint8_t motorStopped, uint8_t triggerReset);
+    uint8_t checkIfCanAutoRecovery(const Sensor::ADC::AnalogValues& analogValues,
+                                   HAL::MotorHardware& motorHardware,
+                                   uint8_t motorStopped,
+                                   uint8_t triggerReset);
 
     /**
      * @brief Clear all errors.

@@ -439,6 +439,11 @@ public:
                readStatusRegister2(status.status2);
     }
 
+    bool readFaultStatus()
+    {
+        return readFaultStatus(faultStatus);
+    }
+
     bool getDeviceId(uint8_t& deviceId) const
     {
         DRV8301StatusRegister2 status;
@@ -616,6 +621,9 @@ private:
     SPIHandle spiHandle;
     Pins pins;
     bool enabled = false;
+
+public:
+    DRV8301FaultStatus faultStatus;
 };
 
 } // namespace Drivers

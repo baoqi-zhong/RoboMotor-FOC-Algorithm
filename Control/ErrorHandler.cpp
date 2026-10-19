@@ -44,8 +44,13 @@ uint8_t ErrorHandler::checkIfAnyErrorStatus()
 }
 
 
-uint8_t ErrorHandler::checkIfStillInError(const Sensor::ADC::AnalogValues& analogValues)
+uint8_t ErrorHandler::checkIfStillInError(const Sensor::ADC::AnalogValues& analogValues,
+                                          HAL::MotorHardware& motorHardware)
 {
+    // Treat a hardware fault or an unreadable fault state as still in error.
+    if(motorHardware.readError())
+        return 1;
+
     if(analogValues.Vbus < errorHandlerConfig.underVoltageThreshold || analogValues.Vbus > errorHandlerConfig.overVoltageThreshold)
         return 1;
     
@@ -193,13 +198,16 @@ uint8_t ErrorHandler::checkErrorHighFreq(const Sensor::ADC::AnalogValues& analog
     return 0;
 }
 
-uint8_t ErrorHandler::checkIfCanAutoRecovery(const Sensor::ADC::AnalogValues& analogValues, uint8_t motorStopped, uint8_t triggerReset)
+uint8_t ErrorHandler::checkIfCanAutoRecovery(const Sensor::ADC::AnalogValues& analogValues,
+                                             HAL::MotorHardware& motorHardware,
+                                             uint8_t motorStopped,
+                                             uint8_t triggerReset)
 {
     // 只有当有错误且不再处于错误状态时才进行 auto Recovery
     if (motorStopped                                      == 1  && 
         errorHandlerConfig.enableAutoRecovery               == 1  && 
         checkIfAnyErrorStatus()                             == 1  &&
-        checkIfStillInError(analogValues)                   == 0  &&
+        checkIfStillInError(analogValues, motorHardware)    == 0  &&
         triggerReset                                        == 0)
     {
         // 进行 auto Recovery
