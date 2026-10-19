@@ -11,7 +11,7 @@
  */
 #include "FlashManager.hpp"
 
-#if (PLATFORM_ST)
+#if (HARDWARE_PLATFORM == HARDWARE_PLATFORM_STM32)
 
 #include "main.h"
 #include "stm32g4xx_hal_flash.h"
@@ -319,4 +319,4 @@ extern "C" void HAL_FLASH_OperationErrorCallback(uint32_t ReturnValue)
     flashState = FlashState::ERROR;
 }
 
-#endif // PLATFORM_ST
+#endif // HARDWARE_PLATFORM == HARDWARE_PLATFORM_STM32

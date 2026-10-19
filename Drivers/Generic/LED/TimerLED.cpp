@@ -11,7 +11,7 @@
  */
 #include "TimerLED.hpp"
 
-#if (PLATFORM_ST)
+#if (HARDWARE_PLATFORM == HARDWARE_PLATFORM_STM32)
 
 namespace Drivers
 {
@@ -51,4 +51,4 @@ void TimerLED::update()
 } // namespace LED
 } // namespace Drivers
 
-#endif // PLATFORM_ST
+#endif // HARDWARE_PLATFORM == HARDWARE_PLATFORM_STM32

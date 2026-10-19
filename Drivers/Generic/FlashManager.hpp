@@ -13,7 +13,7 @@
 
 #include "../Generic/InternalFlashManager.hpp"
 
-#if (PLATFORM_ST)
+#if (HARDWARE_PLATFORM == HARDWARE_PLATFORM_STM32)
 
 namespace Drivers
 {
@@ -36,4 +36,4 @@ FlashErrorState waitForLastOperation(uint32_t timeout);
 } // namespace FlashManager
 } // namespace Drivers
 
-#endif // PLATFORM_ST
+#endif // HARDWARE_PLATFORM == HARDWARE_PLATFORM_STM32

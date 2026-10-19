@@ -1,6 +1,6 @@
 /**
- * @file TimerLED.hpp
- * @brief Timer LED driver class.
+ * @file GPIOLED.hpp
+ * @brief GPIO LED driver class.
  * @author baoqi-zhong (zzhongas@connect.ust.hk)
  *
  * Part of RoboMotor-FOC-Algorithm.
@@ -13,27 +13,26 @@
 
 #include "../../Generic/LED.hpp"
 
-#if (PLATFORM_ST)
+#if (HARDWARE_PLATFORM == HARDWARE_PLATFORM_STM32)
 #include "main.h"
-#include "stm32g4xx_hal_tim.h"
 
 namespace Drivers
 {
 namespace LED
 {
-    
-class TimerLED : public GenericLED
+
+class GPIOLED : public GenericLED
 {
 public:
-    TimerLED(LEDFunctionType functionType_, TIM_HandleTypeDef* htim_, uint16_t channel_);
+    GPIOLED(LEDFunctionType functionType_, GPIO_TypeDef* GPIOPort_, uint16_t GPIOPin_);
     void update();
 
 private:
-    TIM_HandleTypeDef* htim;
-    uint32_t channel;
+    GPIO_TypeDef* GPIOPort;
+    uint16_t GPIOPin;
 };
 
 } // namespace LED
 } // namespace Drivers
 
-#endif // PLATFORM_ST
+#endif // HARDWARE_PLATFORM == HARDWARE_PLATFORM_STM32

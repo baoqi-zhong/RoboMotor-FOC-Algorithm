@@ -19,7 +19,7 @@
 #include "ErrorHandler.hpp"
 #include "FOC.hpp"
 #include "Math.hpp"
-#include "MotorHAL.hpp"
+#include "ThreePhaseTimer.hpp"
 #include "PositionalPID.hpp"
 
 namespace Control::Motor
@@ -52,7 +52,7 @@ struct GenericConfigStatic
     PIDParameters_t velocityPIDParameters;
 };
 
-template<GenericConfigStatic genericConfigStatic, typename MotorHAL>
+template<GenericConfigStatic genericConfigStatic, typename ThreePhaseTimer>
 class Motor
 {
 public:
@@ -84,7 +84,7 @@ public:
 
     void disableMotor();
 
-    MotorHAL motorHAL;
+    ThreePhaseTimer threePhaseTimer;
     FOC::FOC<genericConfigStatic.focConfigStatic> foc;
     Sensor::Encoder<genericConfigStatic.encoderConfigStatic> encoder  
                                                     {genericConfigStatic.encoderConfig};
@@ -113,8 +113,8 @@ public:
     float targetPosition                            = 0.0f;
 };
 
-template<GenericConfigStatic genericConfigStatic, typename MotorHAL>
-void Motor<genericConfigStatic, MotorHAL>::init()
+template<GenericConfigStatic genericConfigStatic, typename ThreePhaseTimer>
+void Motor<genericConfigStatic, ThreePhaseTimer>::init()
 {
     Utils::Trigonometric::init();
     // Control::Calibrator::init();
@@ -122,25 +122,25 @@ void Motor<genericConfigStatic, MotorHAL>::init()
 
     triggerReset = 1;
 
-    motorHAL.startTimerBase();
+    threePhaseTimer.startTimerBase();
 }
 
-template<GenericConfigStatic genericConfigStatic, typename MotorHAL>
-void Motor<genericConfigStatic, MotorHAL>::updateEncoder(uint16_t Q16_encoder_)
+template<GenericConfigStatic genericConfigStatic, typename ThreePhaseTimer>
+void Motor<genericConfigStatic, ThreePhaseTimer>::updateEncoder(uint16_t Q16_encoder_)
 {
     encoder.update(Q16_encoder_);
 }
 
-template<GenericConfigStatic genericConfigStatic, typename MotorHAL>
-void Motor<genericConfigStatic, MotorHAL>::disableMotor()
+template<GenericConfigStatic genericConfigStatic, typename ThreePhaseTimer>
+void Motor<genericConfigStatic, ThreePhaseTimer>::disableMotor()
 {
-    motorHAL.disableTimerPWMOutput();
+    threePhaseTimer.disableTimerPWMOutput();
     foc.enableFOCOutput = false;
     state = MotorState::Stop;
 }
 
-template<GenericConfigStatic genericConfigStatic, typename MotorHAL>
-void Motor<genericConfigStatic, MotorHAL>::run1KhzLoop()
+template<GenericConfigStatic genericConfigStatic, typename ThreePhaseTimer>
+void Motor<genericConfigStatic, ThreePhaseTimer>::run1KhzLoop()
 {
     if(errorHandler.checkError1KHz(adc.analogValues))
         disableMotor();
@@ -181,12 +181,12 @@ void Motor<genericConfigStatic, MotorHAL>::run1KhzLoop()
 
     else if (state == MotorState::Stop)
     {
-        motorHAL.disableTimerPWMOutput();
+        threePhaseTimer.disableTimerPWMOutput();
     }
 
     else if (state == MotorState::preADCCalibrating)
     {
-        motorHAL.disableTimerPWMOutput();
+        threePhaseTimer.disableTimerPWMOutput();
         adc.resetADCCalibrationData();
         state = MotorState::ADCCalibrating;
     }
@@ -222,8 +222,8 @@ void Motor<genericConfigStatic, MotorHAL>::run1KhzLoop()
 
     else if (state == MotorState::preChargingBootCap)
     {
-        motorHAL.setPWMDutyCycle(0.0f, 0.0f, 0.0f);
-        motorHAL.enableTimerPWMLowSideOutput();
+        threePhaseTimer.setPWMDutyCycle(0.0f, 0.0f, 0.0f);
+        threePhaseTimer.enableTimerPWMLowSideOutput();
 
         state = MotorState::ChargingBootCap;
     }
@@ -232,7 +232,7 @@ void Motor<genericConfigStatic, MotorHAL>::run1KhzLoop()
     {
         if(calibrationState != MotorCalibrationState::Stop)
         {
-            motorHAL.enableTimerPWMHighSideOutput();
+            threePhaseTimer.enableTimerPWMHighSideOutput();
             state = MotorState::Stop;
             calibrationState = MotorCalibrationState::Calibrating;
         }
@@ -255,7 +255,7 @@ void Motor<genericConfigStatic, MotorHAL>::run1KhzLoop()
         foc.IdPID.reset();
         foc.IqPID.reset();
 
-        motorHAL.enableTimerPWMHighSideOutput();
+        threePhaseTimer.enableTimerPWMHighSideOutput();
 
         foc.enableFOCOutput = true;
         state = MotorState::Running;
@@ -267,8 +267,8 @@ void Motor<genericConfigStatic, MotorHAL>::run1KhzLoop()
     }
 }
 
-template<GenericConfigStatic genericConfigStatic, typename MotorHAL>
-void Motor<genericConfigStatic, MotorHAL>::run4KhzLoop()
+template<GenericConfigStatic genericConfigStatic, typename ThreePhaseTimer>
+void Motor<genericConfigStatic, ThreePhaseTimer>::run4KhzLoop()
 {
     if(state != MotorState::Running)
         return;
@@ -284,8 +284,8 @@ void Motor<genericConfigStatic, MotorHAL>::run4KhzLoop()
     }
 }
 
-template<GenericConfigStatic genericConfigStatic, typename MotorHAL>
-void Motor<genericConfigStatic, MotorHAL>::runCurrentLoop()
+template<GenericConfigStatic genericConfigStatic, typename ThreePhaseTimer>
+void Motor<genericConfigStatic, ThreePhaseTimer>::runCurrentLoop()
 {
     if(errorHandler.checkErrorHighFreq(adc.analogValues))
         disableMotor();
@@ -302,7 +302,7 @@ void Motor<genericConfigStatic, MotorHAL>::runCurrentLoop()
 
     foc.currentLoopUpdate();
 
-    motorHAL.setPWMDutyCycle(foc.focOutput.dutyA, foc.focOutput.dutyB, foc.focOutput.dutyC);
+    threePhaseTimer.setPWMDutyCycle(foc.focOutput.dutyA, foc.focOutput.dutyB, foc.focOutput.dutyC);
 }
 
 } // namespace Control::Motor

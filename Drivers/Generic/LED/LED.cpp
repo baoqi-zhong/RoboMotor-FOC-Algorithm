@@ -11,7 +11,7 @@
  */
 #include "../../Generic/LED.hpp"
 
-#if (PLATFORM_ST)
+#if (HARDWARE_PLATFORM == HARDWARE_PLATFORM_STM32)
 #include "WS2812.hpp"
 
 namespace Drivers
@@ -136,4 +136,4 @@ void GenericLED::onOff(uint8_t on)
 } // namespace LED
 } // namespace Drivers
 
-#endif // PLATFORM_ST
+#endif // HARDWARE_PLATFORM == HARDWARE_PLATFORM_STM32

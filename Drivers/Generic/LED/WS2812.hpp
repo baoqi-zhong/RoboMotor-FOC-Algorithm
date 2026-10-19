@@ -13,7 +13,7 @@
 
 #include "../../Generic/LED.hpp"
 
-#if (PLATFORM_ST)
+#if (HARDWARE_PLATFORM == HARDWARE_PLATFORM_STM32)
 #include "main.h"
 #include "stm32g4xx_hal_tim.h"
 #include <stdint.h>
@@ -70,4 +70,4 @@ private:
 } // namespace LED
 } // namespace Drivers
 
-#endif // PLATFORM_ST
+#endif // HARDWARE_PLATFORM == HARDWARE_PLATFORM_STM32

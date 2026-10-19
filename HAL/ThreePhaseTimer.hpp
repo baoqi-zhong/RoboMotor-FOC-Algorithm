@@ -1,6 +1,6 @@
 /**
- * @file MotorHAL.hpp
- * @brief Hardware Abstraction Layer for Motor control.
+ * @file ThreePhaseTimer.hpp
+ * @brief Hardware abstraction layer for timers used for three-phase PWM generation.
  * @author baoqi-zhong (zzhongas@connect.ust.hk)
  *
  * Part of RoboMotor-FOC-Algorithm.
@@ -12,13 +12,12 @@
 #pragma once
 
 
-namespace Hardware
+namespace HAL
 {
 
-class MotorHAL
+class ThreePhaseTimer
 {
 public:
-    /* Timer */
     virtual inline void startTimerBase() = 0;
     virtual inline void enableTimerPWMLowSideOutput() = 0;
     virtual inline void enableTimerPWMHighSideOutput() = 0;
@@ -26,4 +25,4 @@ public:
     virtual inline void setPWMDutyCycle(float dutyCycleA, float dutyCycleB, float dutyCycleC) = 0;
 };
     
-} // namespace Hardware
+} // namespace HAL
