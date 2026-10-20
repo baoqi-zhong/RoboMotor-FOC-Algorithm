@@ -197,14 +197,40 @@ public:
         return true;
     }
 
-    bool readAngleDegrees(float& angleDegrees, bool withDaec = true) const
+    /**
+     * @brief Start a pipelined AngleUncompensated read.
+     *
+     * The command frame is built once and reused by fastReadContinue().
+     * The response to this first command is returned by the first
+     * fastReadContinue() call.
+     */
+    bool fastReadStart()
     {
-        uint16_t angle14 = 0;
-        if (!readAngleRaw(angle14, withDaec))
+        fastReadCommand = buildCommand(AS5047PRegister::AngleUncompensated, true);
+
+        uint16_t ignored = 0;
+        if (!transferFrame(fastReadCommand, ignored))
         {
             return false;
         }
-        angleDegrees = static_cast<float>(angle14) * (360.0f / 16384.0f);
+        return true;
+    }
+
+    /**
+     * @brief Receive the pending angle and immediately request the next one.
+     *
+     * The response received in this transfer corresponds to the command sent
+     * by the previous fastReadStart() or fastReadContinue() call.
+     */
+    bool fastReadContinue(uint16_t& angle)
+    {
+        uint16_t response = 0;
+        if (!transferFrame(fastReadCommand, response))
+        {
+            return false;
+        }
+
+        angle = static_cast<uint16_t>((response & ANGLE_MASK) << 2);
         return true;
     }
 
@@ -329,6 +355,7 @@ private:
     }
 
     SPIHandle spiHandle;
+    uint16_t fastReadCommand = 0;
 };
 
 } // namespace Drivers
