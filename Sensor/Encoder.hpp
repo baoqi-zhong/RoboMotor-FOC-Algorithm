@@ -51,6 +51,8 @@ public:
     EncoderConfig encoderConfig;
     Utils::LPF encoderDifferenceLPF;
 
+    uint16_t    Q16_encoder                     = 0;
+
     int16_t     Q16_electricAngle               = 0;
     int16_t     Q16_deltaElectricAngleLPF       = 0;
     int32_t     Q16_electricAngularVelocity     = 0;
@@ -63,7 +65,6 @@ public:
 private:
     bool        initialized                     = false;
 
-    uint16_t    Q16_encoder                     = 0;
     uint16_t    Q16_lastEncoder                 = 0;
     int32_t     Q16_accumulatedEncoder          = 0;
 
