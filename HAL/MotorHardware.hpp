@@ -18,8 +18,8 @@ namespace HAL
 class MotorHardware
 {
 public:
-    virtual inline void enableGateDriver() = 0;
-    virtual bool isGateDriverEnabled() = 0;
+    virtual inline void enableGateDriver() {};
+    virtual bool isGateDriverEnabled() {return true;};
     virtual inline void enableTimerPWMLowSideOutput() = 0;
     virtual inline void enableTimerPWMHighSideOutput() = 0;
     virtual inline void disableTimerPWMOutput() = 0;
@@ -29,13 +29,13 @@ public:
      * @brief Read the platform-specific 1 kHz error source.
      * @return true when an error is active or its state cannot be read.
      */
-    virtual bool readError() = 0;
+    virtual bool readError() {return false;};
 
     /**
      * @brief Attempt to clear the platform-specific latched error.
      * @return true when the clear operation completed successfully.
      */
-    virtual bool clearError() = 0;
+    virtual bool clearError() {return true;};
 };
     
 } // namespace HAL

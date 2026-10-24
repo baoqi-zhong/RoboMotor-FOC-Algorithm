@@ -9,9 +9,7 @@
  * See the LICENSE file in the root directory for full license text.
  */
 #include "HighResTimer.hpp"
-
-#include "stm32f4xx.h"
-
+# if 0
 namespace Utils
 {
 namespace
@@ -88,3 +86,4 @@ void HighResTimer::timerOverflow() noexcept
 }
 
 } // namespace Utils
+#endif
