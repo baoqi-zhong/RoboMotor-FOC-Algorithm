@@ -229,6 +229,10 @@ public:
         {
             return false;
         }
+        if (!hasEvenParity(response))
+        {
+            return false;
+        }
 
         angle = static_cast<uint16_t>((response & ANGLE_MASK) << 2);
         return true;

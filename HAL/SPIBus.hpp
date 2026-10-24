@@ -61,7 +61,7 @@ public:
             return false;
         }
 
-        const bool success = Platform::transferUnselected(handle, txBuffer, txLength, rxBuffer, rxLength, timeout);
+        const bool success = Platform::transferNoCs(handle, txBuffer, txLength, rxBuffer, rxLength, timeout);
         
         if (cs)
         {
@@ -93,7 +93,7 @@ public:
     }
 
 private:
-    static bool transferUnselected(const Handle& handle,
+    static bool transferNoCs(const Handle& handle,
                                    const uint8_t* txBuffer,
                                    uint32_t txLength,
                                    uint8_t* rxBuffer,

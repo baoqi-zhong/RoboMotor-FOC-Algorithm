@@ -114,6 +114,8 @@ public:
     float targetId                                  = 0.0f;
     float targetVelocity                            = 0.0f;
     float targetPosition                            = 0.0f;
+
+    float targetIqModulation                        = 0.0f; /* independent Iq ripple, A */
 };
 
 template<GenericConfigStatic genericConfigStatic, typename MotorHardware>
@@ -311,7 +313,8 @@ void Motor<genericConfigStatic, MotorHardware>::runCurrentLoop()
     foc.focInput.measuredIB = adc.analogValues.measuredIB;
     foc.focInput.measuredIC = adc.analogValues.measuredIC;
     foc.focInput.measuredVbus = adc.analogValues.Vbus;
-    foc.focInput.targetIq = targetIq;
+    /* Speed PID output plus the independently injected torque ripple. */
+    foc.focInput.targetIq = targetIq + targetIqModulation;
     foc.focInput.targetId = targetId;
     foc.focInput.Q16_electricAngle = encoder.Q16_electricAngle;
     foc.focInput.RAD_electricAngularVelocity = encoder.RAD_electricAngularVelocity;
