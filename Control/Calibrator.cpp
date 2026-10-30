@@ -155,7 +155,7 @@ void openLoopMoveTo(int32_t angle, float voltage)
     Control::FOC::outputUalpha = cordicOutputCosMulUd;
     Control::FOC::outputUbeta  = cordicOutputSinMulUd;
 
-    Control::FOC::setPhaseVoltage(Control::FOC::outputUalpha, Control::FOC::outputUbeta);
+    Control::FOC::calculatePhaseVoltage(Control::FOC::outputUalpha, Control::FOC::outputUbeta);
 }
 
 void init()
@@ -204,7 +204,7 @@ void update()
         calibratorStatus.currentVoltage = 0.0f;
         nextCurrentSampleIndex = 0;
         nextEncoderSampleIndex = 0;
-        Control::FOC::setPhaseVoltage(0, 0);
+        Control::FOC::calculatePhaseVoltage(0, 0);
     }
 
     else if(currentAction.action == CalibrateActionType::MOVE_TO_POSITION)

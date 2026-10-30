@@ -68,14 +68,20 @@ public:
         float dutyC         = 0.0f;     /* 输出的 C 相占空比, 0~1 */
     };
 
-    void setPhaseVoltage(float Ualpha, float Ubeta);
+    void calculatePhaseVoltage(float Ualpha, float Ubeta);
 
     /**
-     * @brief 电流环更新调用前需要外部填充 focInput，运行后会更新 focOutput
+     * @brief 更新电流环的测量值, 方便在不使能输出的情况下查看测量值情况
+     * 调用前需要外部填充 focInput
      */
-    void currentLoopUpdate();
+    void currentLoopUpdateMeasure();
 
-    bool enableFOCOutput    = false;    /* 是否使能 FOC 输出，失能时仍会计算相关参数 */
+    /**
+     * @brief 更新电流环的输出值, 需要在使能输出的情况下调用
+     * @return 运行后会更新 focOutput
+     */
+    void currentLoopCalculateOutput();
+
     FOCInput focInput;
     FOCOutput focOutput;
 
@@ -128,7 +134,7 @@ inline float fastInvSquareRoot(float number)
 }
 
 template<FOCConfigStatic focConfigStatic>
-void FOC<focConfigStatic>::setPhaseVoltage(float Ualpha, float Ubeta)
+void FOC<focConfigStatic>::calculatePhaseVoltage(float Ualpha, float Ubeta)
 {
     uint32_t sector = 0;
     float X = 0, Y = 0;
@@ -217,7 +223,7 @@ void FOC<focConfigStatic>::setPhaseVoltage(float Ualpha, float Ubeta)
 }
 
 template<FOCConfigStatic focConfigStatic>
-void FOC<focConfigStatic>::currentLoopUpdate()
+void FOC<focConfigStatic>::currentLoopUpdateMeasure()
 {
     // Clarke 变换
     // measuredIalpha = measuredIA - 0.5f * measuredIB - 0.5f * measuredIphaseC;
@@ -240,14 +246,12 @@ void FOC<focConfigStatic>::currentLoopUpdate()
 
     measuredId = (cordicOutputCosMulIalpha + cordicOutputSinMulIbeta) * focConfigStatic.CurrentCordicBase;
     measuredIq = (-cordicOutputSinMulIalpha + cordicOutputCosMulIbeta) * focConfigStatic.CurrentCordicBase;
+}
 
-    if(!enableFOCOutput)
-    {
-        // 有待斟酌：到底是 set 为 0 电压还是切换到高阻态
-        // setPhaseVoltage(0, 0);
-        return;
-    }
 
+template<FOCConfigStatic focConfigStatic>
+void FOC<focConfigStatic>::currentLoopCalculateOutput()
+{
     float outputLimitVoltage = focInput.measuredVbus;
     if(focConfigStatic.torqueControlMode == TorqueControlMode::CURRENT_TOURQUE_CONTROL)
     {
@@ -351,8 +355,8 @@ void FOC<focConfigStatic>::currentLoopUpdate()
 
     outputUalpha = (cordicOutputCosMulUd - cordicOutputSinMulUq);
     outputUbeta = (cordicOutputSinMulUd + cordicOutputCosMulUq);
-
-    setPhaseVoltage(outputUalpha, outputUbeta);
+    
+    calculatePhaseVoltage(outputUalpha, outputUbeta);
 }
 } // namespace Control::FOC
 

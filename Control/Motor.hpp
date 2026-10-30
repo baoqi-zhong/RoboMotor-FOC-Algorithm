@@ -138,7 +138,6 @@ template<GenericConfigStatic genericConfigStatic, typename MotorHardware>
 void Motor<genericConfigStatic, MotorHardware>::disableMotor()
 {
     motorHardware.disableTimerPWMOutput();
-    foc.enableFOCOutput = false;
     state = MotorState::Stop;
 }
 
@@ -276,7 +275,6 @@ void Motor<genericConfigStatic, MotorHardware>::run1KhzLoop()
 
         motorHardware.enableTimerPWMHighSideOutput();
 
-        foc.enableFOCOutput = true;
         state = MotorState::Running;
     }
 
@@ -306,9 +304,6 @@ void Motor<genericConfigStatic, MotorHardware>::run4KhzLoop()
 template<GenericConfigStatic genericConfigStatic, typename MotorHardware>
 void Motor<genericConfigStatic, MotorHardware>::runCurrentLoop()
 {
-    if(errorHandler.checkErrorHighFreq(adc.analogValues))
-        disableMotor();
-
     foc.focInput.measuredIA = adc.analogValues.measuredIA;
     foc.focInput.measuredIB = adc.analogValues.measuredIB;
     foc.focInput.measuredIC = adc.analogValues.measuredIC;
@@ -320,12 +315,18 @@ void Motor<genericConfigStatic, MotorHardware>::runCurrentLoop()
     foc.focInput.RAD_electricAngularVelocity = encoder.RAD_electricAngularVelocity;
     foc.focInput.RAD_shaftAngularVelocity = encoder.RAD_shaftAngularVelocity;
 
-    foc.currentLoopUpdate();
+    foc.currentLoopUpdateMeasure();
 
-    if (foc.enableFOCOutput)
-    {
-        motorHardware.setPWMDutyCycle(foc.focOutput.dutyA, foc.focOutput.dutyB, foc.focOutput.dutyC);
-    }
+    /* 只有在 Running 的情况下, 才尝试错误保护和控制 */
+    if(state != MotorState::Running)
+        return;
+
+    if(errorHandler.checkErrorHighFreq(adc.analogValues))
+        disableMotor();
+
+    foc.currentLoopCalculateOutput();
+
+    motorHardware.setPWMDutyCycle(foc.focOutput.dutyA, foc.focOutput.dutyB, foc.focOutput.dutyC);
 }
 
 } // namespace Control::Motor
