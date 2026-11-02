@@ -198,7 +198,7 @@ void InterBoard_Decode(uint32_t CANId, uint8_t* rxBuffer)
         // 最后触发复位
         if(rxBuffer[1] & CONTROL_PACKET_TRIGGER_RESET_MASK)
         {
-            MotorStatus.triggerReset = 1;
+            MotorStatus.triggerRecover = 1;
         }
     }
 }
@@ -219,8 +219,6 @@ void InterBoard_TransmitFeedback()
         temp |= RESPONSE_PACKET_IGNORE_ERROR_MASK;
     if(MotorStatus.enableAutoRecovery)
         temp |= RESPONSE_PACKET_AUTO_RESET_MASK;
-    if(MotorStatus.enableFOCOutput)
-        temp |= RESPONSE_PACKET_ENABLE_MOTOR_MASK;
     InterBoardTxBuffer[0] = temp;
 
     temp = 0;

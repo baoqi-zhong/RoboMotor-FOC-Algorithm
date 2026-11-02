@@ -26,7 +26,27 @@
 
 namespace Sensor::ADC
 {
-void ADC::updatePhaseCurrent(uint16_t rawIA, uint16_t rawIB, uint16_t rawIC)
+void ADC::updatePhaseCurrent(float IA, float IB, float IC)
+{
+    analogValues.measuredIA = IA;
+    analogValues.measuredIB = IB;
+    analogValues.measuredIC = IC;
+    analogValues.measuredISum = IA + IB + IC;
+}
+
+void ADC::updatePhaseVoltage(float VA, float VB, float VC)
+{
+    analogValues.measuredVA = VA;
+    analogValues.measuredVB = VB;
+    analogValues.measuredVC = VC;
+}
+
+void ADC::updateVbus(float Vbus)
+{
+    analogValues.Vbus = Vbus;
+}
+
+void ADC::updateRawPhaseCurrent(uint16_t rawIA, uint16_t rawIB, uint16_t rawIC)
 {
     analogValues.rawIA = rawIA;
     analogValues.rawIB = rawIB;
@@ -34,60 +54,77 @@ void ADC::updatePhaseCurrent(uint16_t rawIA, uint16_t rawIB, uint16_t rawIC)
     analogValues.measuredIA = (float)((int16_t)rawIA - adcCalibrationData.IAOffset) * adcCalibrationData.IAGain;
     analogValues.measuredIB = (float)((int16_t)rawIB - adcCalibrationData.IBOffset) * adcCalibrationData.IBGain;
     analogValues.measuredIC = (float)((int16_t)rawIC - adcCalibrationData.ICOffset) * adcCalibrationData.ICGain;
+    analogValues.measuredISum = analogValues.measuredIA + analogValues.measuredIB + analogValues.measuredIC;
 }
 
-void ADC::updatePhaseVoltage(uint16_t rawVA, uint16_t rawVB, uint16_t rawVC)
+void ADC::updateRawPhaseVoltage(uint16_t rawVA, uint16_t rawVB, uint16_t rawVC)
 {
     analogValues.measuredVA = (float)rawVA * adcCalibrationData.VAGain;
     analogValues.measuredVB = (float)rawVB * adcCalibrationData.VBGain;
     analogValues.measuredVC = (float)rawVC * adcCalibrationData.VCGain;
 }
 
-void ADC::updateVbus(uint16_t rawVbus)
+void ADC::updateRawVbus(uint16_t rawVbus)
 {
     analogValues.Vbus = (float)rawVbus * adcCalibrationData.VbusGain;
 }
 
-void ADC::resetADCCalibrationData()
+
+
+/**
+ * 检查 ADC 数据的稳定性. 判定条件:
+ * 1. VBUS 电压的方差小于稳定性判定阈值, 且电压在稳定性判定范围内.
+ * 2. 三相电流的方差小于稳定性判定阈值, 且三相电流在稳定性判定范围内.
+ */
+bool ADC::checkStability()
+{
+    /* 首先要求电压和电流在范围内 */
+    if (
+        FABS(analogValues.measuredIA) > adcCalibrationData.currentStabilityMinMax ||
+        FABS(analogValues.measuredIB) > adcCalibrationData.currentStabilityMinMax ||
+        FABS(analogValues.measuredIC) > adcCalibrationData.currentStabilityMinMax ||
+        analogValues.Vbus < adcCalibrationData.vbusStabilityMin ||
+        analogValues.Vbus > adcCalibrationData.vbusStabilityMax
+    )
+    {
+        resetStabilityChecker();
+        return false;
+    }
+    
+    IAStatisticsCalculator.addData(analogValues.measuredIA);
+    IBStatisticsCalculator.addData(analogValues.measuredIB);
+    ICStatisticsCalculator.addData(analogValues.measuredIC);
+    VbusStatisticsCalculator.addData(analogValues.Vbus);
+
+    if (IAStatisticsCalculator.getCount() != 50)
+    {
+        return false;
+    }
+
+    if (
+        IAStatisticsCalculator.getVariance() > adcCalibrationData.currentStabilityVarianceThreshold ||
+        IBStatisticsCalculator.getVariance() > adcCalibrationData.currentStabilityVarianceThreshold ||
+        ICStatisticsCalculator.getVariance() > adcCalibrationData.currentStabilityVarianceThreshold ||
+        VbusStatisticsCalculator.getVariance() > adcCalibrationData.vbusStabilityVarianceThreshold
+    )
+    {
+        resetStabilityChecker();
+        return false;
+    }
+
+    adcCalibrationData.IAOffset += IAStatisticsCalculator.getMean() / adcCalibrationData.IAGain;
+    adcCalibrationData.IBOffset += IBStatisticsCalculator.getMean() / adcCalibrationData.IBGain;
+    adcCalibrationData.ICOffset += ICStatisticsCalculator.getMean() / adcCalibrationData.ICGain;
+    return true;
+}
+
+
+void ADC::resetStabilityChecker()
 {
     IAStatisticsCalculator.reset();
     IBStatisticsCalculator.reset();
     ICStatisticsCalculator.reset();
-}
-
-void ADC::addADCCalibrationData()
-{
-    IAStatisticsCalculator.addData(analogValues.rawIA);
-    IBStatisticsCalculator.addData(analogValues.rawIB);
-    ICStatisticsCalculator.addData(analogValues.rawIC);
-}
-
-// 返回 1 代表校准成功, 0 代表校准失败. 校准成功的条件是 ADC 数据的标准差小于某个阈值, 且平均值在某个范围内.
-uint8_t ADC::checkADCCalibrationSuccess()
-{
-    // 检查平均方差, 判断 ADC 数据是否稳定.
-    float averageVariance = (
-        IAStatisticsCalculator.getVariance() + 
-        IBStatisticsCalculator.getVariance() + 
-        ICStatisticsCalculator.getVariance()
-    ) / 4.0f;
-
-    if(averageVariance > 5.0f)
-        return 0;
-
-    if(
-        FABS(IAStatisticsCalculator.getMean() - adcCalibrationData.IAOffset) > (adcCalibrationData.IAOffset >> 4) ||
-        FABS(IBStatisticsCalculator.getMean() - adcCalibrationData.IBOffset) > (adcCalibrationData.IBOffset >> 4) ||
-        FABS(ICStatisticsCalculator.getMean() - adcCalibrationData.ICOffset) > (adcCalibrationData.ICOffset >> 4)
-    )
-    {
-        return 0;
-    }
-
-    adcCalibrationData.IAOffset = (uint16_t)IAStatisticsCalculator.getMean();
-    adcCalibrationData.IBOffset = (uint16_t)IBStatisticsCalculator.getMean();
-    adcCalibrationData.ICOffset = (uint16_t)ICStatisticsCalculator.getMean();
-    return 1;
+    VbusStatisticsCalculator.reset();
 }
 
 } // namespace Sensor::ADC

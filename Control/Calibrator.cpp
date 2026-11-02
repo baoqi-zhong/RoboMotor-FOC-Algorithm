@@ -238,7 +238,7 @@ void update()
 
     else if (currentAction.action == CalibrateActionType::START_FOC)
     {
-        /* 校准模式下 FOC State Machine 处于 Stop. 用于防止多次 triggerReset */
+        /* 校准模式下 FOC State Machine 处于 Stop. 用于防止多次 triggerRecover */
         if(Control::Motor::MotorStatus.state == Control::Motor::MotorState::Stop)
         {
             // 进入正常运行模式

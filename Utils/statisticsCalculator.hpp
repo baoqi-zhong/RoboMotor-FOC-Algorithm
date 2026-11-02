@@ -24,12 +24,14 @@ public:
     void reset();
     void setDropRate(float dropRate);
     void addData(float data);
+    
+    uint32_t getCount() { return this->n; }
     float getMean();
     float getVariance();
 
 private:
     /* data */
-    float n;
+    uint32_t n;
     float correctedSumOfSquares;
     float mean;
     float variance;

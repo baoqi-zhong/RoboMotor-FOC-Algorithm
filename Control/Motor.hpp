@@ -58,24 +58,13 @@ class Motor
 public:
     enum class MotorState : uint8_t
     {
-        Stop = 0,
-        preADCCalibrating,
-        ADCCalibrating,
-        preEnablingGateDriver,
-        EnablingGateDriver,
-        preChargingBootCap,
-        ChargingBootCap,
-        preRunning,
+        Stop = 0,           /* 如果不使能 Auto Recovery / 手动触发 Recovery, 则会卡在 Stop 状态 */
+        ADCCalibrating,     /* 等待电压电流稳定与 ADC 校准成功 */
+        GateDriverIniting,  /* 等待 MOS 驱动初始化完毕 */
+        ChargingBootCap,    /* 给 BootCap 电容充电 */
         Running,
 
-        preMusic,
-        Music,
-    };
-
-    enum class MotorCalibrationState : uint8_t
-    {
-        Stop = 0,
-        Calibrating,
+        CalibratingMotor
     };
 
     void init();
@@ -97,9 +86,9 @@ public:
     Control::PositionalPID positionToVelocityPID    {genericConfigStatic.positionToVelocityPIDParameters};
     Control::PositionalPID velocityPID              {genericConfigStatic.velocityPIDParameters};
 
+    uint32_t delayCounter                           = 0;    /* Delay Ticks before switching to next state */
+    int32_t timeoutCounter                          = 0;    /* Timeout Ticks for each state */
     MotorState state                                = MotorState::Stop;
-    uint32_t adcCalibrationCounter                  = 0;
-    MotorCalibrationState calibrationState          = MotorCalibrationState::Stop;
 
     bool enableSpeedCloseLoop                       = genericConfigStatic.motorConfig.enableSpeedCloseLoop;
     bool enablePositionCloseLoop                    = genericConfigStatic.motorConfig.enablePositionCloseLoop;
@@ -108,7 +97,7 @@ public:
     float openLoopRotateSpeed                       = genericConfigStatic.motorConfig.openLoopRotateSpeed;
     float openLoopDragVoltage                       = genericConfigStatic.motorConfig.openLoopDragVoltage;
 
-    uint8_t triggerReset                            = 0;
+    uint8_t triggerRecover                            = 0;
 
     float targetIq                                  = 0.0f;
     float targetId                                  = 0.0f;
@@ -125,7 +114,7 @@ void Motor<genericConfigStatic, MotorHardware>::init()
     // Control::Calibrator::init();
     // Control::InterBoard::init();
 
-    triggerReset = 1;
+    triggerRecover = 1;
 }
 
 template<GenericConfigStatic genericConfigStatic, typename MotorHardware>
@@ -137,34 +126,30 @@ void Motor<genericConfigStatic, MotorHardware>::updateEncoder(uint16_t Q16_encod
 template<GenericConfigStatic genericConfigStatic, typename MotorHardware>
 void Motor<genericConfigStatic, MotorHardware>::disableMotor()
 {
-    motorHardware.disableTimerPWMOutput();
+    motorHardware.disableGateDriver();
     state = MotorState::Stop;
 }
 
 template<GenericConfigStatic genericConfigStatic, typename MotorHardware>
 void Motor<genericConfigStatic, MotorHardware>::run1KhzLoop()
 {
-    if(errorHandler.checkError1KHz(adc.analogValues, motorHardware))
-        disableMotor();
-
-    if(errorHandler.checkIfCanAutoRecovery(adc.analogValues,
-                                           motorHardware,
-                                           state == MotorState::Stop,
-                                           triggerReset))
-        triggerReset = 1;
-
-    if(triggerReset)
+    if (delayCounter > 0)
     {
-        triggerReset = 0;
-        errorHandler.clearAllError();
-        state = MotorState::preADCCalibrating;
+        delayCounter -= 1;
+        return;
     }
 
-    // Config/Flash state-machine update hook. ConfigLoader is currently disabled.
-    // Control::ConfigLoader::update();
+    if (timeoutCounter > 0)
+    {
+        timeoutCounter -= 1;
+    }
 
+    /* Running 保证最低延迟和最常见情况 */
     if (state == MotorState::Running)
     {
+        if(errorHandler.checkError1KHz(adc.analogValues, motorHardware))
+            disableMotor();
+        
         if(enablePositionCloseLoop)
         {
             if(enableSpeedCloseLoop)
@@ -186,102 +171,81 @@ void Motor<genericConfigStatic, MotorHardware>::run1KhzLoop()
 
     else if (state == MotorState::Stop)
     {
-        motorHardware.disableTimerPWMOutput();
-    }
+        motorHardware.disableGateDriver();
+        timeoutCounter = -1; /* 永不超时 */
+        if (errorHandler.errorHandlerConfig.enableAutoRecovery || triggerRecover)
+        {
+            triggerRecover = 0;
+            errorHandler.clearError();
 
-    else if (state == MotorState::preADCCalibrating)
-    {
-        motorHardware.disableTimerPWMOutput();
-        adc.resetADCCalibrationData();
-        adcCalibrationCounter = 0;
-        state = MotorState::ADCCalibrating;
+            adc.resetStabilityChecker();
+            motorHardware.enterCurrentCalibrationMode();
+
+            /* 在真正进入下一个状态之前延迟 200 个周期 */
+            delayCounter = errorHandler.errorHandlerConfig.autoRecoveryTimeout;
+            timeoutCounter = 100; /* 等待 ADC 校准成功, 最多等待 100 个周期后重试 */
+            state = MotorState::ADCCalibrating;
+        }
     }
 
     else if (state == MotorState::ADCCalibrating)
     {
-        if(adcCalibrationCounter < 50)
+        if(adc.checkStability())
         {
-            if (
-                adc.analogValues.Vbus < errorHandler.errorHandlerConfig.underVoltageThreshold || 
-                adc.analogValues.Vbus > errorHandler.errorHandlerConfig.overVoltageThreshold
-            )
-            {
-                state = MotorState::preADCCalibrating;
-                return;
-            }
+            motorHardware.exitCurrentCalibrationMode();
+
+            /* 开 MOS 前, enable 并 Clear Fault */
+            motorHardware.setPWMDutyCycle(0.0f, 0.0f, 0.0f);
+            motorHardware.prepareGateDriver();
             
-            adc.addADCCalibrationData();
-            adcCalibrationCounter += 1;
-            return;
+            delayCounter = 10;      /* 等待 MOS 驱动初始化 */
+            timeoutCounter = 500;   /* 等待 MOS 驱动初始化完毕, 最多等待 100 个周期后重试 */
+            state = MotorState::GateDriverIniting;
         }
-        
-        if(adc.checkADCCalibrationSuccess() == 0)
+
+        /* 超时处理 */
+        if (timeoutCounter == 0)
         {
-            state = MotorState::preADCCalibrating;
-            return;
+            errorHandler.errorStatus.adcCalibrationTimeout = 1;
+            state = MotorState::Stop;
         }
-
-        state = MotorState::preEnablingGateDriver;
     }
 
-    else if (state == MotorState::preEnablingGateDriver)
+    else if (state == MotorState::GateDriverIniting)
     {
-        motorHardware.setPWMDutyCycle(0.0f, 0.0f, 0.0f);
-        motorHardware.enableGateDriver();
-        state = MotorState::EnablingGateDriver;
-    }
-
-    else if (state == MotorState::EnablingGateDriver)
-    {
-        if(motorHardware.isGateDriverEnabled())
+        if(motorHardware.isGateDriverReady())
         {
-            state = MotorState::preChargingBootCap;
+            motorHardware.enableLowSideMosfet();
+            state = MotorState::ChargingBootCap;
         }
-    }
 
-    else if (state == MotorState::preChargingBootCap)
-    {
-        motorHardware.enableTimerPWMLowSideOutput();
-
-        state = MotorState::ChargingBootCap;
+        /* 超时处理 */
+        if (timeoutCounter == 0)
+        {
+            motorHardware.disableGateDriver();
+            errorHandler.errorStatus.gateDriverInitTimeout = 1;
+            state = MotorState::Stop;
+        }
     }
 
     else if (state == MotorState::ChargingBootCap)
     {
-        if(calibrationState != MotorCalibrationState::Stop)
-        {
-            motorHardware.enableTimerPWMHighSideOutput();
-            state = MotorState::Stop;
-            calibrationState = MotorCalibrationState::Calibrating;
-        }
-        else
-        {
-            targetIq = 0;
-            targetId = 0;
-            targetPosition = 0;
-            targetVelocity = 0;
-            
-            state = MotorState::preRunning;
-        }
-    }
+        motorHardware.enableHighSideMosfet();
 
-    else if (state == MotorState::preRunning) 
-    {
+        targetIq = 0;
+        targetId = 0;
+        targetPosition = 0;
+        targetVelocity = 0;
+        
         positionToCurrentPID.reset();
         positionToVelocityPID.reset();
         velocityPID.reset();
         foc.IdPID.reset();
         foc.IqPID.reset();
 
-        motorHardware.enableTimerPWMHighSideOutput();
-
         state = MotorState::Running;
     }
 
-    if(calibrationState != MotorCalibrationState::Stop)
-    {
-        // Control::Calibrator::update();
-    }
 }
 
 template<GenericConfigStatic genericConfigStatic, typename MotorHardware>
@@ -322,7 +286,10 @@ void Motor<genericConfigStatic, MotorHardware>::runCurrentLoop()
         return;
 
     if(errorHandler.checkErrorHighFreq(adc.analogValues))
+    {
         disableMotor();
+        return;
+    }
 
     foc.currentLoopCalculateOutput();
 

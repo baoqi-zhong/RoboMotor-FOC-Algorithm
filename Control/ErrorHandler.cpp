@@ -31,207 +31,96 @@ namespace Control::ErrorHandler
 // static volatile __attribute__((section (".noinit"))) uint32_t hotStartMagicNumber;
 // static volatile __attribute__((section (".noinit"))) uint32_t hardfaultCounter;
 
-
-uint8_t ErrorHandler::checkIfAnyErrorStatus()
+ErrorHandler::ErrorHandler(const ErrorHandlerConfig& errorHandlerConfig_) 
+    : errorHandlerConfig(errorHandlerConfig_)
 {
-    return errorStatus.underVoltage    || 
-        errorStatus.overVoltage        || 
-        errorStatus.overCurrent        ||
-        errorStatus.ADCDecoderError    ||
-        errorStatus.underTemperature   ||
-        errorStatus.overTemperature    || 
-        errorStatus.userFault;
+    overUnderVoltageDebouncer.init(errorHandlerConfig.overUnderVoltageTimeout, errorHandlerConfig.overUnderVoltageTimeout);
+    overCurrentDebouncer.init(errorHandlerConfig.overCurrentTimeout, errorHandlerConfig.overCurrentTimeout);
+    currentSensorErrorDebouncer.init(errorHandlerConfig.overCurrentTimeout << 4, errorHandlerConfig.overCurrentTimeout << 4);
+    clearError();
 }
-
-
-uint8_t ErrorHandler::checkIfStillInError(const Sensor::ADC::AnalogValues& analogValues,
-                                          HAL::MotorHardware& motorHardware)
-{
-    // Treat a hardware fault or an unreadable fault state as still in error.
-    if(motorHardware.readError())
-        return 1;
-
-    if(analogValues.Vbus < errorHandlerConfig.underVoltageThreshold || analogValues.Vbus > errorHandlerConfig.overVoltageThreshold)
-        return 1;
-    
-    if(analogValues.measuredIA > errorHandlerConfig.overCurrentThreshold || 
-        analogValues.measuredIB > errorHandlerConfig.overCurrentThreshold || 
-        analogValues.measuredIC > errorHandlerConfig.overCurrentThreshold ||
-        analogValues.measuredIA < -errorHandlerConfig.overCurrentThreshold ||
-        analogValues.measuredIB < -errorHandlerConfig.overCurrentThreshold ||
-        analogValues.measuredIC < -errorHandlerConfig.overCurrentThreshold
-    )
-        return 1;
-    
-    if(FABS(analogValues.measuredIphaseSum) > errorHandlerConfig.overCurrentThreshold / 5.0f)
-        return 1;
-
-    if(analogValues.NTCTemperature < errorHandlerConfig.underTemperatureThreshold || analogValues.NTCTemperature > errorHandlerConfig.overTemperatureThreshold)
-        return 1;
-
-    // 跑到这里代表电压电流已经正常, 如果有 driver fault 可以尝试触发复位
-    // 下一次调用 CheckError1KHz 时会再次检查 driver fault
-    // if(HAL_GPIO_ReadPin(nFAULT_GPIO_Port, nFAULT_Pin) == GPIO_PIN_RESET)
-    // {
-    //     if(Drivers::STSPIN32G4MosfetDriver::clearFault())
-    //     {
-    //         errorStatus.STSPIN32G4MosfetDriverErrorStatus.I2C_CommunicationError = 1;
-    //     }
-    //     return 1;
-    // }
-
-    
-    return 0;
-}
-
 
 // 以 1KHz 频率调用
-uint8_t ErrorHandler::checkError1KHz(const Sensor::ADC::AnalogValues& analogValues,
+bool ErrorHandler::checkError1KHz(const Sensor::ADC::AnalogValues& analogValues,
                                      HAL::MotorHardware& motorHardware)
 {
-    uint8_t shouldDisableMotor = 0;
+    bool anyErrorOccur = false;
 
     if(errorHandlerConfig.ignoreAllErrors)
-        return 0;
+        return false;
 
-    if(analogValues.Vbus < errorHandlerConfig.underVoltageThreshold)
+    if (overUnderVoltageDebouncer(
+        analogValues.Vbus < errorHandlerConfig.underVoltageThreshold || 
+        analogValues.Vbus > errorHandlerConfig.overVoltageThreshold
+    ))
     {
-        if(errorCounter.underVoltageCounter < errorHandlerConfig.underVoltageTriggerTimeout)
-        {
-            errorCounter.underVoltageCounter ++;
-        }
-        else
-        {
-            shouldDisableMotor = 1;
-            errorStatus.underVoltage = 1;
-        }
+        anyErrorOccur = true;
+        errorStatus.overUnderVoltage = 1;
     }
-    else if(analogValues.Vbus > errorHandlerConfig.overVoltageThreshold)
+    
+    /* 三相电流和不为 0 */
+    if (currentSensorErrorDebouncer(
+        FABS(analogValues.measuredISum) > errorHandlerConfig.overCurrentThreshold / 5.0f
+    ))
     {
-        if(errorCounter.overVoltageCounter < errorHandlerConfig.overVoltageTriggerTimeout)
-        {
-            errorCounter.overVoltageCounter ++;
-        }
-        else
-        {
-            shouldDisableMotor = 1;
-            errorStatus.overVoltage = 1;
-        }
-    }
-    else
-    {
-        if(errorCounter.underVoltageCounter)
-            errorCounter.underVoltageCounter --;
-        if(errorCounter.overVoltageCounter)
-            errorCounter.overVoltageCounter --;
+        anyErrorOccur = true;
+        errorStatus.currentSensorError = 1;
     }
 
-    // 三相电流和不为 0
-    if(FABS(analogValues.measuredIphaseSum) > errorHandlerConfig.overCurrentThreshold / 5.0f)
+    if(!motorHardware.isGateDriverReady())
     {
-        if(errorCounter.currnentSensorErrorCounter < errorHandlerConfig.overCurrentTriggerTimeout)
-        {
-            errorCounter.currnentSensorErrorCounter ++;
-        }
-        else
-        {
-            shouldDisableMotor = 1;
-            errorStatus.ADCDecoderError = 1;
-        }
-    }
-    else
-    {
-        if(errorCounter.currnentSensorErrorCounter)
-            errorCounter.currnentSensorErrorCounter --;
+        anyErrorOccur = true;
+        errorStatus.gateDriverError = 1;
     }
 
-
-    // 不需要累加的错误
-    if(analogValues.NTCTemperature < errorHandlerConfig.underTemperatureThreshold)
-    {
-        shouldDisableMotor = 1;
-        errorStatus.underTemperature = 1;
-    }
-    else if(analogValues.NTCTemperature > errorHandlerConfig.overTemperatureThreshold)
-    {
-        shouldDisableMotor = 1;
-        errorStatus.overTemperature = 1;
-    }
-
-    // Platform-specific error source checked once per 1 kHz control tick.
-    if(motorHardware.readError())
-    {
-        shouldDisableMotor = 1;
-        errorStatus.userFault = 1;
-        motorHardware.clearError();
-    }
-
-    return shouldDisableMotor;
+    return anyErrorOccur;
 }
 
-uint8_t ErrorHandler::checkErrorHighFreq(const Sensor::ADC::AnalogValues& analogValues)
+bool ErrorHandler::checkErrorHighFreq(const Sensor::ADC::AnalogValues& analogValues)
 {
     if(errorHandlerConfig.ignoreAllErrors)
-        return 0;
+        return false;
+    
+    if (analogValues.Vbus < 1.0f)
+    {
+        errorStatus.overUnderVoltage = 1;
+        return true;
+    }
 
-    if(analogValues.measuredIA > errorHandlerConfig.overCurrentThreshold || 
+    if(overCurrentDebouncer(
+        analogValues.measuredIA > errorHandlerConfig.overCurrentThreshold || 
         analogValues.measuredIB > errorHandlerConfig.overCurrentThreshold || 
         analogValues.measuredIC > errorHandlerConfig.overCurrentThreshold ||
         analogValues.measuredIA < -errorHandlerConfig.overCurrentThreshold ||
         analogValues.measuredIB < -errorHandlerConfig.overCurrentThreshold ||
         analogValues.measuredIC < -errorHandlerConfig.overCurrentThreshold
-    )
+    ))
     {
-        if(errorCounter.overCurrentCounter < errorHandlerConfig.overCurrentTriggerTimeout)
-            errorCounter.overCurrentCounter ++;
-        else
-        {
-            errorStatus.overCurrent = 1;
-            return 1;
-        }
-    }
-    else if(errorCounter.overCurrentCounter)
-    {
-        errorCounter.overCurrentCounter --;
+        errorStatus.overCurrent = 1;
+        return true;
     }
 
-    return 0;
+    return false;
 }
 
-uint8_t ErrorHandler::checkIfCanAutoRecovery(const Sensor::ADC::AnalogValues& analogValues,
-                                             HAL::MotorHardware& motorHardware,
-                                             uint8_t motorStopped,
-                                             uint8_t triggerReset)
+void ErrorHandler::clearError()
 {
-    // 只有当有错误且不再处于错误状态时才进行 auto Recovery
-    if (motorStopped                                      == 1  && 
-        errorHandlerConfig.enableAutoRecovery               == 1  && 
-        checkIfAnyErrorStatus()                             == 1  &&
-        checkIfStillInError(analogValues, motorHardware)    == 0  &&
-        triggerReset                                        == 0)
-    {
-        // 进行 auto Recovery
-        // 这里只 set 变量而不进行真正的 Trigger reset 是希望提供另一条路径, 通过 CAN/Ozone 触发 reset.
-        errorCounter.noErrorCounter ++;
-        if(errorCounter.noErrorCounter > errorHandlerConfig.autoRecoveryTimeout)
-        {
-            errorCounter.noErrorCounter = 0;
-            return 1;
-        }
-    }
+    lastErrorStatus.overUnderVoltage        += errorStatus.overUnderVoltage;
+    lastErrorStatus.overCurrent             += errorStatus.overCurrent;
+    lastErrorStatus.currentSensorError      += errorStatus.currentSensorError;
+    lastErrorStatus.adcCalibrationTimeout   += errorStatus.adcCalibrationTimeout;
+    lastErrorStatus.gateDriverInitTimeout   += errorStatus.gateDriverInitTimeout;
+    lastErrorStatus.gateDriverError         += errorStatus.gateDriverError;
 
-    return 0;
-}
+    errorStatus.overUnderVoltage            = 0;
+    errorStatus.overCurrent                 = 0;
+    errorStatus.currentSensorError          = 0;
+    errorStatus.adcCalibrationTimeout       = 0;
+    errorStatus.gateDriverInitTimeout       = 0;
+    errorStatus.gateDriverError             = 0;
 
-void ErrorHandler::clearAllError()
-{
-    errorStatus.underVoltage       = 0;
-    errorStatus.overVoltage        = 0;
-    errorStatus.overCurrent        = 0;
-    errorStatus.ADCDecoderError    = 0;
-    errorStatus.overTemperature    = 0;
-    errorStatus.underTemperature   = 0;
-    errorStatus.userFault = 0;
+    overUnderVoltageDebouncer.reset();
+    currentSensorErrorDebouncer.reset();
 }
 
 } // namespace Control::ErrorHandler

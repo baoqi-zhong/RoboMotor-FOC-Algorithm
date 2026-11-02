@@ -39,7 +39,7 @@ void StatisticsCalculator::addData(float data)
     if(this->dropPeriod == 0 || this->dropCounter > this->dropPeriod)
     {
         float oldMean = this->mean;
-        this->mean += (data - oldMean) / (this->n + 1);
+        this->mean += (data - oldMean) / (float)(this->n + 1);
         this->correctedSumOfSquares += (data - oldMean) * (data - this->mean);
         this->n++;    
 
